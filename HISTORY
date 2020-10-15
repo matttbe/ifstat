@@ -1,8 +1,41 @@
 InterFace STATistics
-Gaël Roualland <gael.roualland@iname.com>
-========================================= 
+Gaël Roualland <gael.roualland@dial.oleane.com>
+=============================================== 
 
 Releases History:
+
+* v1.0 - 21/04/2003 "The Easter Release"
+  - SIOCGIFDATA ioctl(2) support for IRIX and OpenBSD.
+    (allows stats for non root users on OpenBSD).
+  - Improved kvm(3) support.
+  - Route sysctl support for BSD based systems.
+    (allows stats for non root users on NetBSD/MacOS X).
+  - Handle OpenBSD pflog interfaces as loopbacks.
+    (suggested by Nick Nauwelaerts <nick@wanadoo.be>)
+  - Can report total bandwith on monitored interfaces.
+    (suggested by Nick Nauwelaerts <nick@wanadoo.be>)
+  - Dynamic column width to cope with long interfaces names
+    (can be disabled).
+  - Can report bandwith in kbits/sec instead of kbytes/sec.
+  - Fix handling of bandwith larger than display width.
+  - Adjust to height of term when resized.
+  - Can wrap long stats lines when polling lots of interfaces.
+  - Can disable scrolling for one line updated display.
+    (inspired from patch by Joe Laffey <software@laffeycomputer.com>)
+  - Reprint headers on SIGCONT for use with shell job control.
+    (suggested by Joe Laffey <software@laffeycomputer.com>)
+  - Index based polling for ifmib and snmp.
+  - Max number of requests per snmp packet can be set and is
+    automatically lowered on "too big" errors.
+    Poll interfaces independently on error.
+    Walk indexes to discover available interfaces.
+  - Generated interface names for snmp are really their index.
+    (when using #host).
+  - Ignore interfaces for which statistics are not available.
+  - Can ignore "null" interfaces (0 bytes ever sent/received)
+  - Can build as a static library for use in other software.
+  - Can disable warnings.
+  - Misc cleanups and improvements.
 
 * v0.5 - 17/01/2002
   - Cleaner driver interface, no more static stuff.

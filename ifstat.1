@@ -130,31 +130,34 @@
 .\" ========================================================================
 .\"
 .IX Title "IFSTAT 1"
-.TH IFSTAT 1 "2002-01-16" " " "System Utilities"
+.TH IFSTAT 1 "2003-02-05" "ifstat 1.0" "System Utilities"
 .UC
 .SH "NAME"
 ifstat \- Report InterFace STATistics
 .SH "SYNOPSIS"
 .IX Header "SYNOPSIS"
-\&\fBifstat\fR [\fB\-a\fR] [\fB\-l\fR] [\fB\-n\fR] [\fB\-v\fR] [\fB\-h\fR] [\fB\-t\fR] [\fB\-i\fR if0,if1,...] [\fB\-d\fR drv[:opt]] [\fB\-s\fR [comm@][#]host] [\fB\-t\fR] [delay[/delay] [count]]
+\&\fBifstat\fR [\fB\-a\fR] [\fB\-l\fR] [\fB\-z\fR] [\fB\-n\fR] [\fB\-v\fR] [\fB\-h\fR] [\fB\-t\fR] [\fB\-i\fR if0,if1,...] [\fB\-d\fR drv[:opt]] [\fB\-s\fR [comm@][#]host[/nn]] [\fB\-T\fR] [\fB\-A\fR] [\fB\-w\fR] [\fB\-W\fR] [\fB\-S\fR] [\fB\-b\fR] [\fB\-q\fR] [delay[/delay] [count]]
 .SH "DESCRIPTION"
 .IX Header "DESCRIPTION"
-Ifstat is a little tool to report interface activity in KBps, just like iostat/vmstat do for other system statistics.
+Ifstat is a little tool to report interface activity, just like iostat/vmstat do for other system statistics.
 .SH "OPTIONS"
 .IX Header "OPTIONS"
 \&\fBifstat\fR accepts the following options:
 .IP "\fB\-l\fR" 4
 .IX Item "-l"
-Enables monitoring of loopback interfaces. By default, ifstat monitors all non-loopback interfaces that are up. 
+Enables monitoring of loopback interfaces for which statistics are available. By default, ifstat monitors all non-loopback interfaces that are up.
 .IP "\fB\-a\fR" 4
 .IX Item "-a"
-Enables monitoring of all interfaces found.
+Enables monitoring of all interfaces found for which statistics are available.
+.IP "\fB\-z\fR" 4
+.IX Item "-z"
+Hides interface which counters are null, eg interfaces that are up but not used.
 .IP "\fB\-i\fR" 4
 .IX Item "-i"
-Specifies the list of interfaces to monitor, separated by commas (if an interface name has a comma, it can be escaped with '\e').
+Specifies the list of interfaces to monitor, separated by commas (if an interface name has a comma, it can be escaped with '\e'). Multiple instances of the options are added together.
 .IP "\fB\-s\fR" 4
 .IX Item "-s"
-Equivalent to \fB\-d snmp:[comm@][#]host]\fR to poll a remote host through \s-1SNMP\s0. See below for details.
+Equivalent to \fB\-d snmp:[comm@][#]host[/nn]]\fR to poll a remote host through \s-1SNMP\s0. See below for details.
 .IP "\fB\-h\fR" 4
 .IX Item "-h"
 Displays a short help message.
@@ -164,6 +167,27 @@ Turns off displaying the header periodically.
 .IP "\fB\-t\fR" 4
 .IX Item "-t"
 Adds a timestamp at the beginning of each line.
+.IP "\fB\-T\fR" 4
+.IX Item "-T"
+Reports total bandwith for all monitored interfaces.
+.IP "\fB\-A\fR" 4
+.IX Item "-A"
+Disables use of interface indexes: by default, when polling mechanism is index based (snmp, ifmib), ifstat remembers indexes of monitored interfaces to poll only them. However, if interfaces indexes change often (new interfaces added, etc), you might loose some stats, hence this flag. Note that if you ask ifstat to monitor a non existent interface, it will poll all interfaces until it finds the requested one (regardless of this flag) so you can poll for an interface that goes up and down.
+.IP "\fB\-w\fR" 4
+.IX Item "-w"
+Uses fixed width columns, instead of enlarging them if needed for interfaces names to fit.
+.IP "\fB\-W\fR" 4
+.IX Item "-W"
+Wrap lines that are larger than the terminal width (implies \-w). Wrapped lines are prefixed with a cycling letter to ease reading.
+.IP "\fB\-S\fR" 4
+.IX Item "-S"
+Keep stats updated on the same line if possible (no scrolling nor wrapping).
+.IP "\fB\-b\fR" 4
+.IX Item "-b"
+Reports bandwith in kbits/sec instead of kbytes/sec.
+.IP "\fB\-q\fR" 4
+.IX Item "-q"
+Quiet mode, warnings are not printed.
 .IP "\fB\-v\fR" 4
 .IX Item "-v"
 Displays version and the compiled-in drivers.
@@ -182,6 +206,12 @@ This driver gets statistics from FreeBSD's ifmib sysctl. It doesn't accept any o
 .IP "\fBkstat\fR" 4
 .IX Item "kstat"
 This driver gets statistics from Solaris kstat interface. It doesn't accept any options.
+.IP "\fBifdata\fR" 4
+.IX Item "ifdata"
+This driver gets statistics using \s-1SIOCGIFDATA\s0 ioctl under \s-1IRIX\s0 and OpenBSD (different semantics). It doesn't accept any options.
+.IP "\fBroute\fR" 4
+.IX Item "route"
+This driver gets statistics using routing sysctl on \s-1BSD\s0 based systems. It doesn't accept any options.
 .IP "\fBkvm\fR" 4
 .IX Item "kvm"
 This driver gets statistics by reading the kernel live structures. It accepts an option specifying which files/devices to use in the following format : [execfile][,[corefile][,swapfile]] (see \fIkvm_open\fR\|(3) for details on those fields). If a null string is passed for a parameter, the system default will be used for it.
@@ -189,7 +219,9 @@ This driver gets statistics by reading the kernel live structures. It accepts an
 Note that for this driver to work, ifstat needs to have read access to the system memory device. This is usually done by running it as root, or by installing setgid mem or kmem. ifstat will \s-1NOT\s0 install setgid by default; It is up to you to decide if you trust it.
 .IP "\fBsnmp\fR" 4
 .IX Item "snmp"
-This driver gets statistics through \s-1SNMP\s0. The option, in the form [comm@][#]host], specifies the host and eventual community to poll. Default community is public, but can be changed by prepending \*(L"comm@\*(R" to the hostname. If host starts by a #, interface names are generated from their index as `ifNN' (this is a workaround for some equipments that give all interfaces the same description). Default host is localhost, and this will be used by default if snmp is the only available driver.
+This driver gets statistics through \s-1SNMP\s0. The option, in the form [comm@][#]host[/nn]], specifies the host and eventual community to poll. Default community is public, but can be changed by prepending \*(L"comm@\*(R" to the hostname. If host starts by a #, interface names are generated from their index as `ifNN' (this is a workaround for some equipments that give all interfaces the same description). Default host is localhost, and this will be used by default if snmp is the only available driver.
+.Sp
+The driver will try to poll several interfaces at once by grouping requests in \s-1SNMP\s0 packets. By default interfaces will be polled by group of 8. If this doesn't work well with your equipments, you can lower that number by suffixing the hostname with /nn, where nn is the number of interfaces to poll at once. You can also increase the number if you want to poll a large number of interfaces efficiently and if your server supports it.
 .RE
 .RS 4
 .RE
@@ -207,4 +239,4 @@ A second delay can also be specified (separated from the first one by a '/'). In
 \&\fIvmstat\fR\|(1), \fIiostat\fR\|(1)
 .SH "AUTHOR"
 .IX Header "AUTHOR"
-Gaël Roualland, <gael.roualland@iname.com>
+Gaël Roualland, <gael.roualland@dial.oleane.com>

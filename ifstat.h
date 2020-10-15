@@ -1,6 +1,6 @@
 /*
  * ifstat - InterFace STATistics
- * Copyright (c) 2001, Gaël Roualland <gael.roualland@iname.com>
+ * Copyright (c) 2001, Gaël Roualland <gael.roualland@dial.oleane.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,23 +16,33 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: ifstat.h,v 1.7 2002/01/14 00:59:56 gael Exp $
+ * $Id: ifstat.h,v 1.21 2003/04/21 19:58:42 gael Exp $
  */
 
 #ifndef IFSTAT_H
 #define IFSTAT_H
 
+#define IFSTAT_API      1
+
 /* interface flags */
 #define IFSTAT_LOOPBACK 1
 #define IFSTAT_DOWN     2
 #define IFSTAT_HASSTATS 4
+#define IFSTAT_HASINDEX 8
+#define IFSTAT_TOTAL  128
 
 /* interface list */
 struct ifstat_data {
   char *name;
+  int namelen;
   unsigned long obout, obin, bout, bin;
-  int flags;
+  int flags, index;
   struct ifstat_data *next;
+};
+
+struct ifstat_list {
+  struct ifstat_data *first;
+  int flags;
 };
 
 /* driver data */
@@ -43,12 +53,12 @@ struct ifstat_driver {
 		      char *options);
 
   /* scans list of known interfaces by the driver */
-  struct ifstat_data * (*scan_interfaces) (struct ifstat_driver *driver,
-					   int flags);
+  int (*scan_interfaces) (struct ifstat_driver *driver,
+			  struct ifstat_list *ifs);
 
-  /* gathers stats and updates inetrface lists */
+  /* gathers stats and updates interface lists */
   int (*get_stats) (struct ifstat_driver *driver,
-		    struct ifstat_data *ifaces);
+		    struct ifstat_list *ifs);
 
   /* frees/closes driver data */
   void (*close_driver) (struct ifstat_driver *driver);
@@ -57,26 +67,39 @@ struct ifstat_driver {
   void *data;
 };
 
-/* interface managing calls in ifstat.c */
-void add_interface(struct ifstat_data **first, char *ifname);
-void set_interface_stats(struct ifstat_data *data,
-			 unsigned long bytesin,
-			 unsigned long bytesout);
-struct ifstat_data *get_interface(struct ifstat_data *list, char *ifname);
+/* interface managing calls */
+void ifstat_add_interface(struct ifstat_list *ifs, char *ifname, int flags);
+void ifstat_free_interface(struct ifstat_data *data);
 
-extern char *progname;
+void ifstat_set_interface_stats(struct ifstat_data *data,
+				unsigned long bytesin,
+				unsigned long bytesout);
 
-/* backend calls in drivers.c */
+void ifstat_set_interface_index(struct ifstat_data *data,
+				int index);
+
+#define ifstat_get_interface_index(data) ((data)->index)
+#define ifstat_get_interface_name(data) ((data)->name)
+
+struct ifstat_data *ifstat_get_interface(struct ifstat_list *ifs,
+					 char *ifname);
+
+void ifstat_reset_interfaces(struct ifstat_list *ifs);
+
+/* redefine those to override defaults if needed */
+extern char *ifstat_progname;
+extern void (*ifstat_error) (char *format, ...);
+extern int ifstat_quiet;
+
+/* version string */
+extern const char *ifstat_version;
+
+/* perror reporting --internal */
+void ifstat_perror(char *);
+
 /* searches for specified driver (NULL = default). Returns 1 if found */
-int get_driver(char *name, struct ifstat_driver *driver);
-/* prints driver list */
-void print_drivers(FILE *dev);
-
-/* snmp backend in snmp.c */
-int snmp_open_driver(struct ifstat_driver *driver, char *options);
-struct ifstat_data *snmp_scan_interfaces(struct ifstat_driver *driver,
-					 int flags);
-int snmp_get_stats(struct ifstat_driver *driver, struct ifstat_data *ifaces);
-void snmp_close_driver(struct ifstat_driver *driver);
+int ifstat_get_driver(char *name, struct ifstat_driver *driver);
+/* get driver list */
+char *ifstat_list_drivers();
 
 #endif

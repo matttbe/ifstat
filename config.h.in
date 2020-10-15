@@ -1,43 +1,22 @@
 /* config.h.in.  Generated automatically from configure.in by autoheader 2.13.  */
 
+/* Define as the return type of signal handlers (int or void).  */
+#undef RETSIGTYPE
+
 /* Define if you have the ANSI C header files.  */
 #undef STDC_HEADERS
 
 /* Define if you can safely include both <sys/time.h> and <time.h>.  */
 #undef TIME_WITH_SYS_TIME
 
-/* version */
-#undef VERSION
-
-/* Define if you have a sa_len member in struct sockaddr */
-#undef HAVE_SOCKADDR_SA_LEN
-
-/* Define if you have a if_xname member in struct ifnet */
-#undef HAVE_IFNET_IF_XNAME
-
-/* Define if you want to use kstat to get stats */
-#undef USE_KSTAT
-
-/* Define if you want to use /proc to get stats */
-#undef USE_PROC
-
-/* Define if you want to use if_mib to get stats */
-#undef USE_IFMIB
-
-/* Define if you want to use ioctls to get if list */
-#undef USE_IOCTL
-
-/* Define if you want ot use if_nameindex to find interfaces */
-#undef USE_IFNAMEINDEX
-
-/* Define if you want to use kvm to get stats */
-#undef USE_KVM
-
-/* Define if you have SNMP support */
-#undef USE_SNMP
+/* Define if you have the sigaction function.  */
+#undef HAVE_SIGACTION
 
 /* Define if you have the <ctype.h> header file.  */
 #undef HAVE_CTYPE_H
+
+/* Define if you have the <errno.h> header file.  */
+#undef HAVE_ERRNO_H
 
 /* Define if you have the <fcntl.h> header file.  */
 #undef HAVE_FCNTL_H
@@ -48,17 +27,41 @@
 /* Define if you have the <kvm.h> header file.  */
 #undef HAVE_KVM_H
 
+/* Define if you have the <limits.h> header file.  */
+#undef HAVE_LIMITS_H
+
 /* Define if you have the <net/if.h> header file.  */
 #undef HAVE_NET_IF_H
+
+/* Define if you have the <net/if_dl.h> header file.  */
+#undef HAVE_NET_IF_DL_H
 
 /* Define if you have the <net/if_mib.h> header file.  */
 #undef HAVE_NET_IF_MIB_H
 
+/* Define if you have the <net/if_types.h> header file.  */
+#undef HAVE_NET_IF_TYPES_H
+
 /* Define if you have the <net/if_var.h> header file.  */
 #undef HAVE_NET_IF_VAR_H
 
+/* Define if you have the <net/route.h> header file.  */
+#undef HAVE_NET_ROUTE_H
+
+/* Define if you have the <net/soioctl.h> header file.  */
+#undef HAVE_NET_SOIOCTL_H
+
+/* Define if you have the <signal.h> header file.  */
+#undef HAVE_SIGNAL_H
+
+/* Define if you have the <stdarg.h> header file.  */
+#undef HAVE_STDARG_H
+
 /* Define if you have the <sys/ioctl.h> header file.  */
 #undef HAVE_SYS_IOCTL_H
+
+/* Define if you have the <sys/param.h> header file.  */
+#undef HAVE_SYS_PARAM_H
 
 /* Define if you have the <sys/socket.h> header file.  */
 #undef HAVE_SYS_SOCKET_H
@@ -83,3 +86,52 @@
 
 /* Define if you have the socket library (-lsocket).  */
 #undef HAVE_LIBSOCKET
+
+/* Define if you want to use /proc to get stats */
+#undef USE_PROC
+
+/* Proc file to poll for stats */
+#undef PROC_FILE
+
+/* Define if you want to use kstat to get stats */
+#undef USE_KSTAT
+
+/* Define if you want to use if_mib to get stats */
+#undef USE_IFMIB
+
+/* Define if you have a ifr_data member in struct ifreq */
+#undef HAVE_IFREQ_IFR_DATA
+
+/* Define if you want to use ifdata to get stats */
+#undef USE_IFDATA
+
+/* Define this if you want to use roue(4) sysctl to get stats */
+#undef USE_ROUTE
+
+/* Define if you have a if_xname member in struct ifnet */
+#undef HAVE_IFNET_IF_XNAME
+
+/* Define if you have a if_link member in struct ifnet */
+#undef HAVE_IFNET_IF_LINK
+
+/* Define if you want to use kvm to get stats */
+#undef USE_KVM
+
+/* Define if you want to use ioctls to get if list */
+#undef USE_IOCTL
+
+/* Define if you have a sa_len member in struct sockaddr */
+#undef HAVE_SOCKADDR_SA_LEN
+
+/* Define if you want ot use if_nameindex to find interfaces */
+#undef USE_IFNAMEINDEX
+
+/* Define if your SNMP implementation is net-snmp v5.0 or greater */
+#undef HAVE_NET_SNMP
+
+/* Define if you have SNMP support */
+#undef USE_SNMP
+
+/* Version */
+#undef VERSION
+

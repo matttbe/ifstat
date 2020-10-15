@@ -1,3 +1,45 @@
+ifstat (1.0-1) unstable; urgency=low
+
+  * Upstream release.
+  * Support for building with net-snmp 5.0 and >
+
+ -- Gaël Roualland <gael.roualland@dial.oleane.com>  Mon, 21 Apr 2003 23:22:17 +0200
+
+ifstat (1.0rc3-1) unstable; urgency=low
+
+  * Upstream release candidate. 
+
+ -- Gaël Roualland <gael.roualland@dial.oleane.com>  Sat, 19 Apr 2003 02:50:02 +0200
+
+ifstat (1.0rc2-1) unstable; urgency=low
+
+  * Upstream release candidate. 
+
+ -- Gaël Roualland <gael.roualland@dial.oleane.com>  Sun,  2 Feb 2003 19:15:53 +0100
+
+ifstat (1.0rc1-1) unstable; urgency=low
+
+  * Do not create /usr/doc link as per policy.
+  * Link libifstat-config.1 to undocumented. 
+  * Add GPL location in copyright file.
+
+ -- Gaël Roualland <gael.roualland@dial.oleane.com>  Sun,  2 Feb 2003 04:22:09 +0100
+
+ifstat (1.0pre-1) unstable; urgency=low
+
+  * Temporary upstream release. 
+  * Created new libifstat-dev package
+  * Updated build dependency on libsnmp-dev for future libsnmp packages.
+
+ -- Gaël Roualland <gael.roualland@dial.oleane.com>  Fri, 20 Sep 2002 00:41:24 +0200
+
+ifstat (0.5-2) unstable; urgency=low
+
+  * Interim release for debian packaging (Closes: #148218)
+  * Sponsored by Igor Genibel <igenibel@debian.org>
+
+ -- Gaël Roualland <gael.roualland@dial.oleane.com>  Mon,  8 Jul 2002 00:30:44 +0200
+
 ifstat (0.5-1) unstable; urgency=low
 
   * Upstream release

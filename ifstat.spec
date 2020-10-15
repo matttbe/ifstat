@@ -1,13 +1,13 @@
 # Time-stamp: <01/12/25 14:04:41 ifstat.spec wbosse@berlin.snafu.de>
-# $Id: ifstat.spec,v 1.4 2002/01/16 23:07:28 gael Exp $
+# $Id: ifstat.spec,v 1.8 2003/04/21 21:26:00 gael Exp $
 
 Name: ifstat
 Summary: InterFace STATistics
-Version: 0.5
+Version: 1.0
 Release: 1
 Group: Applications
 Copyright: GPL
-Vendor: Gaël Roualland <gael.roualland@iname.com>
+Vendor: Gaël Roualland <gael.roualland@dial.oleane.com>
 URL: http://gael.roualland.free.fr/ifstat/
 Packager: Werner Bosse <wbosse@berlin.snafu.de>
 Source0: %{name}-%{version}.tar.gz

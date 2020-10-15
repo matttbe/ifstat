@@ -1,4 +1,7 @@
 This package was debianized by Gaël Roualland <gael.roualland@dial.oleane.com> on
 Sun,  6 Jan 2002 01:39:24 +0100.
 
-Copyright: GPL
+Copyright: GNU General Public License (GPL)
+
+On Debian GNU/Linux systems, the complete text of the GNU General
+Public License can be found in `/usr/share/common-licenses/GPL'.

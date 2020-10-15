@@ -1,14 +1,22 @@
+#!/bin/sh
+
+pod2man --center="System Utilities" --release="ifstat `cat VERSION`" --lax --section=1 ifstat.pod > ifstat.1
+
+exit 0;
+
+=cut
+
 =head1 NAME
 
 ifstat - Report InterFace STATistics
 
 =head1 SYNOPSIS
 
-B<ifstat> [B<-a>] [B<-l>] [B<-n>] [B<-v>] [B<-h>] [B<-t>] [B<-i> if0,if1,...] [B<-d> drv[:opt]] [B<-s> [comm@][#]host] [B<-t>] [delay[/delay] [count]]
+B<ifstat> [B<-a>] [B<-l>] [B<-z>] [B<-n>] [B<-v>] [B<-h>] [B<-t>] [B<-i> if0,if1,...] [B<-d> drv[:opt]] [B<-s> [comm@][#]host[/nn]] [B<-T>] [B<-A>] [B<-w>] [B<-W>] [B<-S>] [B<-b>] [B<-q>] [delay[/delay] [count]]
 
 =head1 DESCRIPTION
 
-Ifstat is a little tool to report interface activity in KBps, just like iostat/vmstat do for other system statistics.
+Ifstat is a little tool to report interface activity, just like iostat/vmstat do for other system statistics.
 
 =head1 OPTIONS
 
@@ -18,19 +26,23 @@ B<ifstat> accepts the following options:
 
 =item B<-l>
 
-Enables monitoring of loopback interfaces. By default, ifstat monitors all non-loopback interfaces that are up. 
+Enables monitoring of loopback interfaces for which statistics are available. By default, ifstat monitors all non-loopback interfaces that are up.
 
 =item B<-a>
 
-Enables monitoring of all interfaces found.
+Enables monitoring of all interfaces found for which statistics are available.
+
+=item B<-z>
+
+Hides interface which counters are null, eg interfaces that are up but not used.
 
 =item B<-i>
 
-Specifies the list of interfaces to monitor, separated by commas (if an interface name has a comma, it can be escaped with '\').
+Specifies the list of interfaces to monitor, separated by commas (if an interface name has a comma, it can be escaped with '\'). Multiple instances of the options are added together.
 
 =item B<-s>
 
-Equivalent to B<-d snmp:[comm@][#]host]> to poll a remote host through SNMP. See below for details.
+Equivalent to B<-d snmp:[comm@][#]host[/nn]]> to poll a remote host through SNMP. See below for details.
 
 =item B<-h>
 
@@ -43,6 +55,34 @@ Turns off displaying the header periodically.
 =item B<-t>
 
 Adds a timestamp at the beginning of each line.
+
+=item B<-T>
+
+Reports total bandwith for all monitored interfaces.
+
+=item B<-A>
+
+Disables use of interface indexes: by default, when polling mechanism is index based (snmp, ifmib), ifstat remembers indexes of monitored interfaces to poll only them. However, if interfaces indexes change often (new interfaces added, etc), you might loose some stats, hence this flag. Note that if you ask ifstat to monitor a non existent interface, it will poll all interfaces until it finds the requested one (regardless of this flag) so you can poll for an interface that goes up and down.
+
+=item B<-w>
+
+Uses fixed width columns, instead of enlarging them if needed for interfaces names to fit.
+
+=item B<-W>
+
+Wrap lines that are larger than the terminal width (implies -w). Wrapped lines are prefixed with a cycling letter to ease reading.
+
+=item B<-S>
+
+Keep stats updated on the same line if possible (no scrolling nor wrapping).
+
+=item B<-b>
+
+Reports bandwith in kbits/sec instead of kbytes/sec.
+
+=item B<-q>
+
+Quiet mode, warnings are not printed.
 
 =item B<-v>
 
@@ -68,6 +108,14 @@ This driver gets statistics from FreeBSD's ifmib sysctl. It doesn't accept any o
 
 This driver gets statistics from Solaris kstat interface. It doesn't accept any options.
 
+=item B<ifdata>
+
+This driver gets statistics using SIOCGIFDATA ioctl under IRIX and OpenBSD (different semantics). It doesn't accept any options.
+
+=item B<route>
+
+This driver gets statistics using routing sysctl on BSD based systems. It doesn't accept any options.
+
 =item B<kvm>
 
 This driver gets statistics by reading the kernel live structures. It accepts an option specifying which files/devices to use in the following format : [execfile][,[corefile][,swapfile]] (see kvm_open(3) for details on those fields). If a null string is passed for a parameter, the system default will be used for it.
@@ -76,7 +124,9 @@ Note that for this driver to work, ifstat needs to have read access to the syste
 
 =item B<snmp>
 
-This driver gets statistics through SNMP. The option, in the form [comm@][#]host], specifies the host and eventual community to poll. Default community is public, but can be changed by prepending "comm@" to the hostname. If host starts by a #, interface names are generated from their index as `ifNN' (this is a workaround for some equipments that give all interfaces the same description). Default host is localhost, and this will be used by default if snmp is the only available driver.
+This driver gets statistics through SNMP. The option, in the form [comm@][#]host[/nn]], specifies the host and eventual community to poll. Default community is public, but can be changed by prepending "comm@" to the hostname. If host starts by a #, interface names are generated from their index as `ifNN' (this is a workaround for some equipments that give all interfaces the same description). Default host is localhost, and this will be used by default if snmp is the only available driver.
+
+The driver will try to poll several interfaces at once by grouping requests in SNMP packets. By default interfaces will be polled by group of 8. If this doesn't work well with your equipments, you can lower that number by suffixing the hostname with /nn, where nn is the number of interfaces to poll at once. You can also increase the number if you want to poll a large number of interfaces efficiently and if your server supports it.
 
 =back
 
@@ -99,4 +149,4 @@ vmstat(1), iostat(1)
 
 =head1 AUTHOR
 
-Gaël Roualland, <gael.roualland@iname.com>
+Gaël Roualland, <gael.roualland@dial.oleane.com>

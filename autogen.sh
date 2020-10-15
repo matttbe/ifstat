@@ -62,6 +62,8 @@ echo "Running autoheader..."
 autoheader
 echo "Running autoconf ..."
 autoconf
+echo "Creating man page ..."
+sh ifstat.pod
 
 if test x$NOCONFIGURE = x; then
   echo Running $srcdir/configure $conf_flags "$@" ...

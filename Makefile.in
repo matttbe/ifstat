@@ -6,36 +6,46 @@ datadir     = @datadir@
 bindir      = @bindir@
 mandir      = @mandir@
 etcdir      = @sysconfdir@
+includedir  = @includedir@
 
 SHELL       = /bin/sh
 CC          = @CC@
 RM          = rm -f
 INSTALL	    = @INSTALL@
+RANLIB	    = @RANLIB@
 CFLAGS      = -I. @CFLAGS@ @DEFS@ @CPPFLAGS@
 LDFLAGS     = @LDFLAGS@
 LIBS        = @LIBS@
-SRCS        = ifstat.c drivers.c snmp.c
-OBJS        = ${SRCS:.c=.o} 
+LIBSRCS	    = drivers.c data.c @SNMPSRC@
+SRCS        = ifstat.c $(LIBSRCS)
+OBJS        = ${SRCS:.c=.o}
+LIBOBJS     = ${LIBSRCS:.c=.o}
 TARGET      = ifstat
+LIBTARGET   = libifstat.a
+TARGETS	    = $(TARGET) @LIBTARGET@
 
 .SUFFIXES: .c .o
 
 .c.o:
 	$(CC) $(CFLAGS) -c $< -o $@
 
-all: $(TARGET) Makefile ifstat.1
+all: $(TARGETS) Makefile
 
-$(TARGET) : $(OBJS)
+$(TARGET): $(OBJS)
 	$(CC) $(OBJS) $(LDFLAGS) $(LIBS) -o $(TARGET)
 
+$(LIBTARGET): $(LIBOBJS)
+	ar rv $(LIBTARGET) $(LIBOBJS)
+	$(RANLIB) $(LIBTARGET)
+
 clean:
-	$(RM) *.o *~ .*~ core \#*\# gmon.out *.bak $(TARGET)
+	$(RM) *.o *~ .*~ core \#*\# gmon.out *.bak $(TARGETS)
 
 distclean: clean
-	$(RM) config.h config.cache config.log config.status Makefile
+	$(RM) config.h config.cache config.log config.status Makefile libifstat-config
 
 maintainer-clean: distclean
-	$(RM) configure config.h.in
+	$(RM) configure config.h.in ifstat.1
 
 ${srcdir}/configure: configure.in
 	cd ${srcdir} && autoconf
@@ -49,18 +59,31 @@ Makefile: Makefile.in config.status
 config.status: configure
 	./config.status --recheck
 
-ifstat.1: ifstat.pod
-	pod2man --center="System Utilities" --release=" " --lax --section=1 $< > $@
+libifstat-config: libifstat-config.in
+	CONFIG_FILES=libifstat-config CONFIG_HEADERS= ./config.status
 
-install: all
+install: install-$(TARGET) install-@LIBTARGET@
+
+install-$(TARGET): $(TARGET)
 	$(INSTALL) -d -m 755 $(bindir)
 	$(INSTALL) -s -m 755 $(TARGET) $(bindir)/$(TARGET)
 	$(INSTALL) -d -m 755 $(mandir)/man1
 	$(INSTALL) -m 644 ifstat.1 $(mandir)/man1/ifstat.1
 
+install-$(LIBTARGET): $(LIBTARGET) libifstat-config
+	$(INSTALL) -d -m 755 $(bindir)
+	$(INSTALL) -m 755 libifstat-config $(bindir)/libifstat-config
+	$(INSTALL) -d -m 755 $(includedir)
+	$(INSTALL) -m 644 ifstat.h $(includedir)/ifstat.h
+	$(INSTALL) -d -m 755 $(libdir)
+	$(INSTALL) -m 644 $(LIBTARGET) $(libdir)/$(LIBTARGET)
+
+install-: # dependency when not building library
+
 realclean: maintainer-clean
 
 # deps
 ifstat.o: ifstat.c ifstat.h config.h
-drivers.o: drivers.c ifstat.h config.h
-snmp.o: snmp.c ifstat.h config.h
+drivers.o: drivers.c ifstat.h config.h snmp.h
+snmp.o: snmp.c ifstat.h config.h snmp.h
+

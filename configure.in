@@ -1,6 +1,6 @@
 dnl configure.in for ifstat
 dnl Process this file with autoconf to create configure
-dnl $Id: configure.in,v 1.24 2002/01/16 23:07:27 gael Exp $
+dnl $Id: configure.in,v 1.44 2003/04/21 21:15:42 gael Exp $
 AC_INIT(ifstat.c)
 
 AC_ARG_ENABLE(debug,   [  --enable-debug          setup flags (gcc) for debugging (default=no)],
@@ -9,7 +9,7 @@ CPPFLAGS="$CPPFLAGS -DDEBUG"
 LDFLAGS="$LDFLAGS",)
 AC_ARG_ENABLE(optim,   [  --enable-optim          setup flags (gcc) for optimizations (default=no)],
 if test "x$enable_debug" != "xyes" ; then
-  CFLAGS="$CFLAGS -O3 -g0"
+  CFLAGS="$CFLAGS -O3 -fomit-frame-pointer -g0"
   LDFLAGS="$LDFLAGS -s"
 else
   AC_MSG_WARN([enable-optim and enable-debug are incompatible -- disabling optimizations])
@@ -20,38 +20,47 @@ AC_CONFIG_HEADER(config.h)
 dnl Programs
 AC_PROG_INSTALL
 AC_PROG_CC
+AC_PROG_RANLIB
 
 AC_HEADER_STDC
 AC_CHECK_HEADERS(sys/time.h)
 AC_HEADER_TIME
-AC_CHECK_HEADERS(unistd.h ctype.h sys/types.h net/if.h sys/socket.h sys/ioctl.h sys/termios.h) 
+AC_CHECK_HEADERS(unistd.h ctype.h sys/types.h sys/param.h net/if.h net/if_var.h net/if_types.h sys/socket.h sys/ioctl.h sys/sockio.h net/soioctl.h sys/termios.h errno.h signal.h stdarg.h limits.h)
+AC_TYPE_SIGNAL
+AC_CHECK_FUNCS(sigaction)
+
 # Options for various drivers
 # auto means try if no other found, no disables, and anything else is try.
-AC_ARG_WITH(proc, [  --with-proc             include /proc/net/dev support (default=auto)],
+AC_ARG_WITH(proc, [  --with-proc[=FILE]      include /proc/net/dev support (default=auto)],
             [], [with_proc=auto])
 AC_ARG_WITH(kstat, [  --with-kstat            include kstat(3K) support (default=auto)],
             [], [with_kstat=auto])
 AC_ARG_WITH(ifmib, [  --with-ifmib            include ifmib(4) support (default=auto)],
             [], [with_ifmib=auto])
+AC_ARG_WITH(ifdata, [  --with-ifdata           include ifdata ioctl support (default=auto)],
+            [], [with_ifdata=auto])
+AC_ARG_WITH(route, [  --with-route            include route(4) sysctl support (default=auto)],
+            [], [with_route=auto])
 AC_ARG_WITH(kvm,  [  --with-kvm              include kvm(3) support (default=auto)],
             [], [with_kvm=auto])
-AC_ARG_WITH(snmp, [  --with-snmp=prefix      include UCD-SNMP support (default=yes)],
+AC_ARG_WITH(snmp, [  --with-snmp[=PREFIX]    include UCD-SNMP support (default=yes)],
             [], [with_snmp=yes])
 with_ioctl=no # only enabled if needed by other drivers
-local_driver=no # yes if one driver is local
+local=no # yes if one driver is local
 
 # checking for proc (Linux)
 if test "x$with_proc" != "xno"; then
-  AC_MSG_CHECKING([for /proc/net/dev interface])
-  if grep -q Inter- /proc/net/dev 2>/dev/null; then
-    AC_DEFINE([USE_PROC])
+  case "$with_proc" in
+     /*) file=$with_proc ;;
+     *) file=/proc/net/dev ;;
+  esac
+  AC_MSG_CHECKING([for proc interface in $file])
+  if grep -q Inter- $file 2>/dev/null; then
+    AC_DEFINE([USE_PROC], 1, [Define if you want to use /proc to get stats])
+    AC_DEFINE_UNQUOTED([PROC_FILE], ["$file"], [Proc file to poll for stats])
     with_proc=yes
     with_ioctl=yes
-    local_driver=yes
-    # turn off other drivers on auto mode
-    test "x$with_kstat" = "xauto" && with_kstat=no
-    test "x$with_kvm" = "xauto" && with_kvm=no
-    test "x$with_ifmib" = "xauto" && with_ifmib=no
+    local=yes
   else
     with_proc=no
   fi
@@ -59,6 +68,7 @@ if test "x$with_proc" != "xno"; then
 fi
 
 # checking for kstat (Solaris)
+test "x$with_kstat" = "xauto" -a "x$local" = "xyes" && with_kstat=no
 if test "x$with_kstat" != "xno"; then
   AC_CHECK_FUNC(kstat_open, with_kstat=yes, with_kstat=no)
   if test "x$withkstat" != "xyes" ; then
@@ -69,30 +79,136 @@ if test "x$with_kstat" != "xno"; then
   fi
   if test "x$with_kstat" = "xyes" ; then
     AC_CHECK_HEADERS(kstat.h)
-    AC_DEFINE([USE_KSTAT])
+    AC_DEFINE([USE_KSTAT], 1, [Define if you want to use kstat to get stats])
     with_ioctl=yes
-    local_driver=yes
-    # turn off other drivers on auto mode
-    test "x$with_kvm" = "xauto" && with_kvm=no
-    test "x$with_ifmib" = "xauto" && with_ifmib=no
+    local=yes
   fi
 fi
 
 # checking for ifmib (FreeBSD)
+test "x$with_ifmib" = "xauto" -a "x$local" = "xyes" && with_ifmib=no
 if test "x$with_ifmib" != "xno"; then
   AC_CHECK_HEADER(net/if_mib.h,
                   [AC_CHECK_FUNC(sysctl, with_ifmib=yes, with_ifmib=no)],
                   with_ifmib=no)
   if test "x$with_ifmib" = "xyes"; then
     AC_CHECK_HEADERS(sys/sysctl.h net/if_mib.h)
-    AC_DEFINE([USE_IFMIB])
-    local_driver=yes
-    # turn off other drivers on auto mode
-    test "x$with_kvm" = "xauto" && with_kvm=no
+    AC_MSG_CHECKING([for working ifmib sysctl])
+    # try run since interface is available on darwin but doesn't work
+    AC_TRY_RUN([#include <sys/types.h>
+		#include <sys/socket.h>
+	        #ifdef HAVE_SYS_PARAM_H
+   		#include <sys/param.h>
+		#endif
+		#ifdef HAVE_SYS_SYSCTL_H
+		#include <sys/sysctl.h>
+		#endif
+		#ifdef HAVE_NET_IF_H
+		#include <net/if.h>
+		#endif
+		#ifdef HAVE_NET_IF_MIB_H
+		#include <net/if_mib.h>
+		#endif
+		int ifcount[] = {CTL_NET, PF_LINK, NETLINK_GENERIC,
+				 IFMIB_SYSTEM, IFMIB_IFCOUNT};
+		int size;
+		int main() { return sysctl(ifcount, 5, NULL, &size, NULL, NULL); }],
+	       [with_ifmib=yes], [with_ifmib=no], [with_ifmib=maybe])
+    AC_MSG_RESULT([$with_ifmib])
+    if test "x$with_ifmib" != "xno" ; then
+      AC_DEFINE([USE_IFMIB], 1, [Define if you want to use if_mib to get stats])
+      local=yes
+    fi
+  fi
+fi
+
+# checking for ioctl ifdata (Irix, ...)
+test "x$with_ifdata" = "xauto" -a "x$local" = "xyes" && with_ifdata=no
+if test "x$with_ifdata" != "xno"; then
+  AC_MSG_CHECKING([for SIOCGIFDATA and ifdatareq])
+  AC_TRY_COMPILE([#include <sys/types.h>
+		  #include <sys/socket.h>
+		  #include <sys/ioctl.h>
+		  #ifdef HAVE_SYS_SOCKIO_H
+                  #include <sys/sockio.h>
+		  #endif
+		  #ifdef HAVE_NET_SOIOCTL_H
+ 		  #include <net/soioctl.h>
+		  #endif
+		  #include <net/if.h>],
+		 [struct ifdatareq ifd;
+		  ioctl(0, SIOCGIFDATA, (char *) &ifd);
+		  ifd.ifd_ifd.ifi_ibytes = ifd.ifd_ifd.ifi_obytes;],
+		 with_ifdata=yes, with_ifdata=no)
+  AC_MSG_RESULT([$with_ifdata])
+  test "x$with_ifdata" = "xno" && with_ifdata=checkifr
+fi
+if test "x$with_ifdata" = "xcheckifr"; then
+  AC_MSG_CHECKING([for SIOCGIFDATA and ifreq.ifr_data])
+  AC_TRY_COMPILE([#include <sys/types.h>
+		  #include <sys/socket.h>
+		  #include <sys/ioctl.h>
+		  #ifdef HAVE_SYS_SOCKIO_H
+                  #include <sys/sockio.h>
+		  #endif
+		  #ifdef HAVE_NET_SOIOCTL_H
+ 		  #include <net/soioctl.h>
+		  #endif
+		  #include <net/if.h>],
+    	         [struct ifreq ifr; struct if_data ifd;
+                  ifr.ifr_data = &ifd;
+		  ioctl(0, SIOCGIFDATA, (char *) &ifr);
+		  ifd.ifi_ibytes = ifd.ifi_obytes;],
+		  [with_ifdata=yes
+                   AC_DEFINE([HAVE_IFREQ_IFR_DATA], 1,
+                             [Define if you have a ifr_data member in struct ifreq])],
+	           with_ifdata=no)
+  AC_MSG_RESULT([$with_ifdata])
+fi
+if test "x$with_ifdata" = "xyes"; then
+  AC_DEFINE([USE_IFDATA], 1, [Define if you want to use ifdata to get stats])
+  local=yes
+  with_ioctl=yes
+fi
+
+# checking for route sysctl (*BSDs)
+test "x$with_route" = "xauto" -a "x$local" = "xyes" && with_route=no
+if test "x$with_route" != "xno"; then
+  AC_CHECK_HEADERS(sys/sysctl.h net/route.h net/if_dl.h)
+  AC_CHECK_FUNC(sysctl, with_route=yes, with_route=no)
+  if test "x$with_route" = "xyes"; then
+    AC_MSG_CHECKING([for route info sysctl])
+    AC_TRY_COMPILE([#include <sys/types.h>
+	  	    #include <sys/socket.h>
+ 		    #ifdef HAVE_SYS_PARAM_H
+   		    #include <sys/param.h>
+		    #endif
+ 		    #ifdef HAVE_SYS_SYSCTL_H
+   		    #include <sys/sysctl.h>
+		    #endif
+                    #ifdef HAVE_NET_IF_H
+                    #include <net/if.h>
+                    #endif
+		    #ifdef HAVE_NET_IF_DL_H
+	   	    #include <net/if_dl.h>
+		    #endif],
+		   [struct sockaddr_dl dl;
+                    struct if_msghdr ifm;
+		    int iflist[] = {CTL_NET, PF_ROUTE, 0, AF_LINK, NET_RT_IFLIST};
+                    ifm.ifm_type = dl.sdl_nlen;
+                    dl.sdl_data + ifm.ifm_msglen;
+		    ifm.ifm_data.ifi_ibytes;],
+		   with_route=yes, with_route=no)
+    AC_MSG_RESULT([$with_route])
+    if test "x$with_route" != "xno"; then
+      AC_DEFINE([USE_ROUTE], 1, [Define this if you want to use roue(4) sysctl to get stats])
+      local=yes
+    fi
   fi
 fi
 
 # checking for kvm (*BSDs)
+test "x$with_kvm" = "xauto" -a "x$local" = "xyes" && with_kvm=no
 if test "x$with_kvm" != "xno"; then
   AC_CHECK_FUNC(kvm_open, with_kvm=yes, with_kvm=no)
   if test "x$with_kvm" != "xyes" ; then
@@ -102,7 +218,8 @@ if test "x$with_kvm" != "xno"; then
     esac
   fi
   if test "x$with_kvm" = "xyes"; then
-    AC_CHECK_HEADERS(fcntl.h kvm.h net/if_var.h)
+    AC_CHECK_HEADERS(fcntl.h kvm.h)
+
     AC_MSG_CHECKING([for ifnet if_xname member])
     AC_TRY_COMPILE([#include <sys/types.h>
                     #include <sys/socket.h>
@@ -111,19 +228,32 @@ if test "x$with_kvm" != "xno"; then
 		    #include <net/if_var.h>
 		    #endif],[struct ifnet in; in.if_xname[0] = 'a';],
                    ifxname=yes, ifxname=no)
-    test "x$ifxname" = "xyes" && AC_DEFINE(HAVE_IFNET_IF_XNAME)
+    test "x$ifxname" = "xyes" && AC_DEFINE([HAVE_IFNET_IF_XNAME], 1,
+	[Define if you have a if_xname member in struct ifnet])
     AC_MSG_RESULT([$ifxname])
-    AC_DEFINE([USE_KVM])
-    AC_MSG_WARN([you will need to make ifstat SGID kmem to run as simple user])
-    local_driver=yes
-    with_ioctl=yes
+
+    AC_MSG_CHECKING([for ifnet if_link member])
+    AC_TRY_COMPILE([#include <sys/types.h>
+                    #include <sys/socket.h>
+		    #include <net/if.h>
+		    #ifdef HAVE_NET_IF_VAR_H
+		    #include <net/if_var.h>
+		    #endif],[struct ifnet in; in.if_link;],
+                   iflink=yes, iflink=no)
+    test "x$iflink" = "xyes" && AC_DEFINE([HAVE_IFNET_IF_LINK], 1,
+	[Define if you have a if_link member in struct ifnet])
+    AC_MSG_RESULT([$iflink])
+
+    AC_DEFINE([USE_KVM], 1, [Define if you want to use kvm to get stats])
+    AC_MSG_WARN([you might need to make ifstat SGID kmem to run as simple user])
+    local=yes
   fi
 fi
 
 # checking for ioctl (siocgifconf) to get interfaces
+test "x$with_ioctl" = "xauto" -a "x$local" = "xyes" && with_ioctl=no
 if test "x$with_ioctl" != "xno"; then
-  AC_DEFINE([USE_IOCTL])
-  AC_CHECK_HEADERS(sys/sockio.h)
+  AC_DEFINE([USE_IOCTL], 1, [Define if you want to use ioctls to get if list])
   AC_CHECK_FUNC(socket, checksocket=no, checksocket=yes)
   if test "x$checksocket" = "xyes"; then 
     case "x$LIBS" in
@@ -134,8 +264,8 @@ if test "x$with_ioctl" != "xno"; then
   AC_CHECK_FUNC(if_nameindex, ifnameindex=yes, ifnameindex=no)
   if test "x$ifnameindex" != "xyes"; then 
     case "x$LIBS" in
-      *-lsocket*);;
-      *) AC_CHECK_LIB(if_nameindex, nsl, [ifnameindex=yes; LIBS="$LIBS -lnsl"]) ;;
+      *-lnsl*);;
+      *) AC_CHECK_LIB(nsl, if_nameindex, [ifnameindex=yes; LIBS="$LIBS -lnsl"]) ;;
     esac
   fi
   if test "x$ifnameindex" != "xyes"; then
@@ -144,50 +274,73 @@ if test "x$with_ioctl" != "xno"; then
     #include <sys/types.h>
     #include <sys/socket.h>],[struct sockaddr sa; sa.sa_len = 1;],
                    salen=yes, salen=no)
-    test "x$salen" = "xyes" && AC_DEFINE(HAVE_SOCKADDR_SA_LEN)
+    test "x$salen" = "xyes" && AC_DEFINE([HAVE_SOCKADDR_SA_LEN], 1,
+	[Define if you have a sa_len member in struct sockaddr])
     AC_MSG_RESULT([$salen])
   else
-    AC_DEFINE([USE_IFNAMEINDEX])
+    AC_DEFINE([USE_IFNAMEINDEX], 1,
+	[Define if you want ot use if_nameindex to find interfaces])
   fi
 fi
 
-# checking for snmp (UCD-SNMP)
+# checking for snmp (NET-SNMP/UCD-SNMP)
 if test "x$with_snmp" != "xno" ; then
-  OCFLAGS="$CFLAGS"
+  OCPPFLAGS="$CPPFLAGS"
   OLDFLAGS="$LDFLAGS"
   if test "x$with_snmp" != "xyes" ; then
-    CFLAGS="$CFLAGS -I$with_snmp/include"
+    CPPFLAGS="$CPPFLAGS -I$with_snmp/include"
     LDFLAGS="$LDFLAGS -L$with_snmp/lib"
   fi
-  with_snmp=no
-  SNMPLIBALONE="-lsnmp"
-  # Setting to be able to force linking with -lcrypto....
-  # This is needed on OpenBSD (at least) where the snmplib port links without -lcrypto,
-  # but fails to run.
-  AC_ARG_WITH(libcrypto,
-              [  --with-libcrypto        force link with -lcrypto for UCD-SNMP (default=no)],
-	      [], [with_libcrypto=no])
-  if test "x$with_libcrypto" = "xyes" ; then
-    SNMPLIBALONE=""
-  fi
-  for lib in $SNMPLIBALONE "-lsnmp -lcrypto" ; do
-    if test "x$with_snmp" != "xyes" ; then
-      AC_MSG_CHECKING([for ucd-snmp in $lib])
-      OLIBS="$LIBS"
-      LIBS="$LIBS $lib"
-      AC_TRY_LINK([#include <unistd.h>
-                   #include <sys/types.h>
-                   #include <sys/socket.h>
-                   #include <netinet/in.h>
-                   #include <ucd-snmp/ucd-snmp-config.h>
-                   #include <ucd-snmp/ucd-snmp-includes.h>],
-	          [struct snmp_session s; snmp_sess_init(&s);],
-                  [with_snmp=yes], [LIBS="$OLIBS"])
-      AC_MSG_RESULT([$with_snmp])
+  AC_CHECK_HEADER(net-snmp/net-snmp-config.h, with_snmp=net,
+		  [AC_CHECK_HEADER(ucd-snmp/ucd-snmp-config.h,
+                                  with_snmp=ucd, with_snmp=no)])
+
+  if test "x$with_snmp" != "xno"; then
+    if test "x$with_snmp" = "xnet"; then
+       AC_DEFINE([HAVE_NET_SNMP], 1,
+	         [Define if your SNMP implementation is net-snmp v5.0 or greater])
+       libsnmp="-lnetsnmp"
+    else
+       libsnmp="-lsnmp"
     fi
-  done
+
+    with_snmp=no
+    SNMPLIBALONE="$libsnmp"
+    # Setting to be able to force linking with -lcrypto....
+    # This is needed on OpenBSD (at least) where the snmplib port links without -lcrypto,
+    # but fails to run.
+    AC_ARG_WITH(libcrypto,
+                [  --with-libcrypto        force link with -lcrypto for UCD-SNMP (default=no)],
+	        [], [with_libcrypto=no])
+    if test "x$with_libcrypto" = "xyes" ; then
+      SNMPLIBALONE=""
+    fi
+    for lib in $SNMPLIBALONE "$libsnmp -lcrypto" ; do
+      if test "x$with_snmp" != "xyes" ; then
+        AC_MSG_CHECKING([for snmp support in $lib])
+        OLIBS="$LIBS"
+        LIBS="$LIBS $lib"
+        AC_TRY_LINK([#include <unistd.h>
+                     #include <sys/types.h>
+                     #include <sys/socket.h>
+                     #include <netinet/in.h>
+		     #ifdef HAVE_NET_SNMP
+                     #include <net-snmp/net-snmp-config.h>
+                     #include <net-snmp/net-snmp-includes.h>
+		     #else
+                     #include <ucd-snmp/ucd-snmp-config.h>
+                     #include <ucd-snmp/ucd-snmp-includes.h>
+		     #endif],
+	            [struct snmp_session s; snmp_sess_init(&s);],
+                    [with_snmp=yes], [LIBS="$OLIBS"])
+        AC_MSG_RESULT([$with_snmp])
+      fi
+    done
+  fi
   if test "x$with_snmp" = "xyes" ; then
-    AC_DEFINE([USE_SNMP])
+    AC_DEFINE([USE_SNMP], 1, [Define if you have SNMP support])
+    SNMPSRC=snmp.c
+    AC_SUBST(SNMPSRC)
     # hint users about the possible needed option
     case `uname -s` in
      *OpenBSD*)
@@ -197,13 +350,13 @@ if test "x$with_snmp" != "xno" ; then
        esac ;;
     esac
   else
-    CFLAGS="$OCFLAGS"
+    CPPFLAGS="$OCPPFLAGS"
     LDFLAGS="$OLDFLAGS"
   fi
 fi
 
 # checking that we do have at least one driver
-if test "x$local_driver" != "xyes"; then
+if test "x$local" != "xyes"; then
   if test "x$with_snmp" = "xyes"; then
     AC_MSG_WARN([no native stats gathering mechanism found; will use SNMP.])
   else
@@ -211,13 +364,21 @@ if test "x$local_driver" != "xyes"; then
   fi
 fi
 
+# check for library
+AC_ARG_ENABLE(library,   [  --enable-library        enable build and installation of libifstat (default=no)], LIBTARGET=libifstat.a, )
+
 dnl Version
-VERSION="0.5"
-AC_DEFINE_UNQUOTED(VERSION, "$VERSION")
+VERSION="`cat VERSION`"
+test -z $VERSION && VERSION="0.0"
+# perl -MPOSIX -e 'print strftime("%Y%m%d", localtime((stat("CVS"))[9]));'
+test -d CVS && VERSION="$VERSION-cvs"`date +%Y%m%d`
+AC_DEFINE_UNQUOTED(VERSION, "$VERSION", [Version])
 
 dnl Output
+AC_SUBST(VERSION)
 AC_SUBST(CFLAGS)
 AC_SUBST(CPPFLAGS)
 AC_SUBST(LDFLAGS)
+AC_SUBST(LIBTARGET)
 
 AC_OUTPUT(Makefile)
