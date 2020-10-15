@@ -16,7 +16,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: drivers.c,v 1.38 2003/02/02 17:39:19 gael Exp $
+ * $Id: drivers.c,v 1.45 2003/11/22 01:27:51 gael Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -59,6 +59,12 @@ char *strchr (), *strrchr ();
 #ifdef HAVE_NET_SOIOCTL_H
 #include <net/soioctl.h>
 #endif
+#ifdef HAVE_SYS_MBUF_H
+#include <sys/mbuf.h>
+#endif
+#ifdef HAVE_NET_ROUTE_H
+#include <net/route.h>
+#endif
 #ifdef HAVE_NET_IF_H
 #include <net/if.h>
 #endif
@@ -77,8 +83,17 @@ char *strchr (), *strrchr ();
 #ifdef HAVE_NET_IF_DL_H
 #include <net/if_dl.h>
 #endif
-#ifdef HAVE_NET_ROUTE_H
-#include <net/route.h>
+#ifdef HAVE_SYS_DLPI_H
+#include <sys/dlpi.h>
+#endif
+#ifdef HAVE_SYS_DLPI_EXT_H
+#include <sys/dlpi_ext.h>
+#endif
+#ifdef HAVE_STROPTS_H
+#include <stropts.h>
+#endif
+#ifdef HAVE_SYS_MIB_H
+#include <sys/mib.h>
 #endif
 #ifdef HAVE_KSTAT_H
 #include <kstat.h>
@@ -95,6 +110,12 @@ char *strchr (), *strrchr ();
 #ifdef HAVE_LIMITS_H
 #include <limits.h>
 #endif
+#ifdef HAVE_NLIST_H
+#include <nlist.h>
+#endif
+#ifdef HAVE_PATHS_H
+#include <paths.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include "ifstat.h"
@@ -104,6 +125,17 @@ char *strchr (), *strrchr ();
 
 #ifndef IFNAMSIZ
 #define IFNAMSIZ 16
+#endif
+
+#ifdef USE_WIN32
+#include <windows.h>
+#include <iphlpapi.h>
+#ifndef IFF_UP
+#define IFF_UP       1
+#endif
+#ifndef IFF_LOOPBACK
+#define IFF_LOOPBACK 2
+#endif
 #endif
 
 static void examine_interface(struct ifstat_list *ifs, char *name,
@@ -304,6 +336,107 @@ static void kstat_close_driver(struct ifstat_driver *driver) {
 #endif
 
 #ifdef USE_KVM
+#ifndef HAVE_KVM
+/* use internal emulation using open/read/nlist */
+#ifndef _POSIX2_LINE_MAX
+#define _POSIX2_LINE_MAX 2048
+#endif
+
+#ifndef _PATH_KMEM
+#define _PATH_KMEM "/dev/kmem"
+#endif
+
+#ifndef _PATH_UNIX
+#define _PATH_UNIX "/vmunix"
+#endif
+
+typedef struct _kvm_t {
+  int fd;
+  char *errbuf;
+  char *execfile;
+} kvm_t;
+
+static void _kvm_error(char *errbuf, char *message) {
+  strncpy(errbuf, message ? message : strerror(errno),
+	  _POSIX2_LINE_MAX - 1);
+  errbuf[_POSIX2_LINE_MAX - 1] = '\0';
+}
+
+static kvm_t *kvm_openfiles(const char *execfile, const char *corefile,
+			    const char *swapfile, int flags, char *errbuf) {
+  kvm_t *kd;
+
+  if (swapfile != NULL) {
+    _kvm_error(errbuf, "swap file option not supported");
+    return NULL;
+  }
+  
+  if ((kd = malloc(sizeof(kvm_t))) == NULL) {
+    _kvm_error(errbuf, NULL);
+    return NULL;
+  }
+
+  if ((kd->fd = open(corefile ? corefile : _PATH_KMEM, flags)) < 0) {
+    _kvm_error(errbuf, NULL);
+    free(kd);
+    return NULL;
+  }
+  kd->execfile = execfile ? strdup(execfile) : NULL;
+  kd->errbuf = errbuf;
+  return kd;
+}
+
+static int kvm_nlist (kvm_t *kd, struct nlist *nl) {
+  int count;
+  
+#ifdef HAVE_KNLIST
+  if (kd->execfile == NULL) {
+#ifdef HAVE_KNLIST_ARGS3 
+    for(count = 0; nl[count].n_name != NULL; count++);
+    count = knlist(nl, count, sizeof(struct nlist));
+#else
+    count = knlist(nl);
+#endif
+    if (count < 0)
+      _kvm_error(kd->errbuf, "error looking up symbol in live kernel");
+    return count;
+  }
+#endif  
+  if ((count = nlist(kd->execfile ? kd->execfile : _PATH_UNIX, nl)) < 0)
+    _kvm_error(kd->errbuf, "error looking up symbol in kernel file");
+  return count;
+}
+
+#ifdef HAVE_READX
+#define KOFFSET(x) ((x) & 0x7FFFFFFF)
+#define KREAD(fd, buf, size, addr) readx((fd), (buf), (size), ((off_t) (addr)) < 0 ? 1 : 0)
+#else
+#define KOFFSET(x) (x)
+#define KREAD(fd, buf, size, addr) read((fd), (buf), (size))
+#endif
+
+static ssize_t kvm_read(kvm_t *kd, unsigned long addr, void *buf, size_t nbytes) {
+  ssize_t len;
+
+  if (lseek(kd->fd, KOFFSET(addr), SEEK_SET) == -1) {
+    _kvm_error(kd->errbuf, NULL);
+    return -1;
+  }
+  if ((len = KREAD(kd->fd, buf, nbytes, addr)) < 0) {
+    _kvm_error(kd->errbuf, NULL);
+    return -1;
+  }
+  return len;
+}
+
+static int kvm_close(kvm_t *kd) {
+  close(kd->fd);
+  free(kd->execfile);
+  free(kd);
+  return 0;
+}
+#endif
+
 struct kvm_driver_data {
   kvm_t *kvmfd;
   unsigned long ifnetaddr;
@@ -313,7 +446,7 @@ struct kvm_driver_data {
 static int kvm_open_driver(struct ifstat_driver *driver,
 			   char *options) {
   struct kvm_driver_data *data;
-  struct nlist kvm_syms[] = { { "_ifnet" }, { NULL } };
+  struct nlist kvm_syms[2];
   unsigned long ifnetaddr;
   char *files[3] = { NULL /* execfile */,
 		     NULL /* corefile */,
@@ -345,17 +478,28 @@ static int kvm_open_driver(struct ifstat_driver *driver,
     return 0;
   }
 
-  if (kvm_nlist(data->kvmfd, kvm_syms) < 0) {
-    ifstat_error("kvm_nlist(ifnetaddr): %s", data->errbuf);
+  memset(&kvm_syms, 0, sizeof(kvm_syms));
+  kvm_syms[0].n_name = "_ifnet";
+  if (kvm_nlist(data->kvmfd, kvm_syms) < 0 ||
+      kvm_syms[0].n_value == 0) {
+    kvm_syms[0].n_name = "ifnet";
+    if (kvm_nlist(data->kvmfd, kvm_syms) < 0) {
+      ifstat_error("kvm_nlist: %s", data->errbuf);
+      return 0;
+    }
+  }
+  
+  if (kvm_syms[0].n_value == 0) {
+    ifstat_error("kvm: no _ifnet or ifnet symbol found");
     return 0;
   }
-
+  
   if (kvm_read(data->kvmfd, (unsigned long) kvm_syms[0].n_value,
 	       &ifnetaddr, sizeof(ifnetaddr)) < 0) {
     ifstat_error("kvm_read(ifnetaddr): %s", data->errbuf);
     return 0;
   }
-
+  
   if (ifnetaddr == 0) {
     ifstat_error("kvm: ifnetaddr has null address.");
     return 0;
@@ -367,11 +511,16 @@ static int kvm_open_driver(struct ifstat_driver *driver,
   return 1;
 }
 
+#ifdef HAVE_IFNET_IF_NEXT
+#define IFNET_NEXT(ifnet) (ifnet).if_next
+#else
+#ifdef HAVE_IFNET_IF_LINK
+#define if_list if_link
+#endif
 #ifndef TAILQ_NEXT
 #define TAILQ_NEXT(elm, field)    ((elm)->field.tqe_next)
 #endif
-#ifdef HAVE_IFNET_IF_LINK
-#define if_list if_link
+#define IFNET_NEXT(ifnet) TAILQ_NEXT((&ifnet), if_list)
 #endif
 
 static int kvm_map_ifs(struct ifstat_driver *driver,
@@ -386,7 +535,7 @@ static int kvm_map_ifs(struct ifstat_driver *driver,
   char interface[IFNAMSIZ + 10];
 
   for (ifaddr = data->ifnetaddr; ifaddr != 0;
-       ifaddr = (unsigned long) TAILQ_NEXT(&ifnet, if_list)) {
+       ifaddr = (unsigned long) IFNET_NEXT(ifnet)) {
     if (kvm_read(data->kvmfd, ifaddr, &ifnet, sizeof(ifnet)) < 0) {
       ifstat_error("kvm_read: %s", data->errbuf);
       return 0;
@@ -834,6 +983,366 @@ static void route_close_driver(struct ifstat_driver *driver) {
 }
 #endif
 
+#ifdef USE_DLPI
+
+#define DLPI_DEFBUF_LEN 1024
+#define DLPI_NO_PPA -1
+#define DLPI_DEVICE "/dev/dlpi"
+
+struct dlpi_driver_data {
+  int fd;
+  unsigned int *buf;
+  int maxlen;
+  int ppa;
+};
+
+static int dlpi_open_driver(struct ifstat_driver *driver, char *options) {
+  struct dlpi_driver_data *dlpi;
+
+  if ((dlpi = malloc(sizeof(struct dlpi_driver_data))) == NULL) {
+    ifstat_perror("malloc");
+    return 0;
+  }
+
+  if ((dlpi->fd = open(options != NULL ? options : DLPI_DEVICE, O_RDWR)) < 0) {
+    ifstat_perror("open");
+    free(dlpi);
+    return 0;
+  }
+
+  dlpi->maxlen = DLPI_DEFBUF_LEN;
+  if ((dlpi->buf = malloc(dlpi->maxlen)) == NULL) {
+    ifstat_perror("malloc");
+    free(dlpi);
+    return 0;
+
+  }
+  dlpi->ppa = DLPI_NO_PPA;
+
+  driver->data = (void *) dlpi;
+  return 1;
+}
+
+static int dlpi_req (struct dlpi_driver_data *dlpi, void *req, int reqlen,
+		     int ackprim, void **ack, int *acklen) {
+  struct strbuf ctlptr;
+  int len, ret, flags;
+  dl_error_ack_t *err_ack;
+  
+  ctlptr.maxlen = 0;
+  ctlptr.len = reqlen;
+  ctlptr.buf = req;
+  
+  if (putmsg(dlpi->fd, &ctlptr, NULL, 0) < 0) {
+    ifstat_perror("putmsg");
+    return 0;
+  }
+  
+  ctlptr.maxlen = dlpi->maxlen;
+  ctlptr.buf = (char *) dlpi->buf;
+  ctlptr.len = 0;
+  
+  len = 0;
+  flags = 0;
+  while ((ret = getmsg(dlpi->fd, &ctlptr, NULL, &flags)) == MORECTL) {
+    /* duplicate size of buf */
+    dlpi->maxlen *= 2;
+    if ((dlpi->buf = realloc(dlpi->buf, dlpi->maxlen)) == NULL) {
+      ifstat_perror("malloc");
+      return 0;
+    }
+    len += ctlptr.len;
+    ctlptr.buf = (char *) dlpi->buf + len;
+    ctlptr.maxlen = dlpi->maxlen - len;
+    ctlptr.len = 0;
+  }
+  if (ret < 0) {
+    ifstat_perror("getmsg");
+    return 0;
+  }
+  len += ctlptr.len;
+  
+  err_ack = (dl_error_ack_t *) dlpi->buf;
+  if (err_ack->dl_primitive != ackprim) {
+    if (err_ack->dl_primitive == DL_ERROR_ACK) {
+      errno = err_ack->dl_errno;
+      ifstat_perror("dlpi");
+    } else {
+      ifstat_error("dlpi: unexpected ack type returned");
+    }
+    return 0;
+  }
+
+  if (ack != NULL)
+    *ack = dlpi->buf;
+  if (acklen != NULL)
+    *acklen = len;
+	
+  return 1;
+}
+
+static int dlpi_attach(struct dlpi_driver_data *dlpi, int ppa) {
+  dl_attach_req_t attach_req;
+  dl_detach_req_t dettach_req;
+  
+  /* check if already attached */
+  if (dlpi->ppa == ppa)
+    return 1;
+  
+  /* else detach */
+  if (dlpi->ppa != DLPI_NO_PPA) {
+    dettach_req.dl_primitive = DL_DETACH_REQ;
+    if (!dlpi_req(dlpi, &dettach_req, sizeof(dl_detach_req_t),
+		  DL_OK_ACK, NULL, NULL))
+      return 0;
+    dlpi->ppa = DLPI_NO_PPA;
+    if (ppa == DLPI_NO_PPA)
+      return 1; /* we're done */
+  }
+
+  /* attach */
+  attach_req.dl_primitive = DL_ATTACH_REQ;
+  attach_req.dl_ppa = ppa;
+  if (!dlpi_req(dlpi, &attach_req, sizeof(dl_attach_req_t),
+		DL_OK_ACK, NULL, NULL))
+    return 0;
+  dlpi->ppa = ppa;
+  
+  return 1;
+}
+
+static int dlpi_get_ifmib(struct dlpi_driver_data *dlpi, int ppa, mib_ifEntry *mib) {
+  dl_get_statistics_req_t stats_req;
+  dl_get_statistics_ack_t *stats_ack;
+  int len;
+
+  /* first attach to PPA */
+  if (!dlpi_attach(dlpi, ppa))
+    return 0;
+
+  /* grab stats */
+  stats_req.dl_primitive = DL_GET_STATISTICS_REQ;
+  if (!dlpi_req(dlpi, &stats_req, sizeof(dl_get_statistics_req_t), 
+		DL_GET_STATISTICS_ACK, (void **) &stats_ack, &len))
+    return 0;
+
+  if (len < sizeof(dl_get_statistics_ack_t) ||
+      stats_ack->dl_stat_offset < 0 || 
+      stats_ack->dl_stat_offset + sizeof(mib_ifEntry) > len) {
+    ifstat_error("dlpi: invalid data returned by stats ack");
+  }
+
+  memcpy(mib, (char *) stats_ack + stats_ack->dl_stat_offset,
+	 sizeof(mib_ifEntry));
+
+  return 1;
+}
+
+static int dlpi_map_ifs(struct dlpi_driver_data *dlpi,
+			int (*mapf)(mib_ifEntry *mib, int ppa, char *name,
+				    void *mdata),
+			void *mdata) {
+  dl_hp_ppa_req_t ppa_req;
+  dl_hp_ppa_ack_t *ppa_ack;
+  dl_hp_ppa_info_t *ppa_info;
+  mib_ifEntry mib;
+  void *buf;
+  int len, i, ofs;
+  char ifname[sizeof(ppa_info->dl_module_id_1) + 12];
+
+  if (!dlpi_attach(dlpi, DLPI_NO_PPA))
+    return 0;
+
+  ppa_req.dl_primitive = DL_HP_PPA_REQ;
+  if (!dlpi_req(dlpi, &ppa_req, sizeof(ppa_req),
+		DL_HP_PPA_ACK, (void **) &ppa_ack, &len))
+    return 0;
+
+  if (len < sizeof(dl_hp_ppa_ack_t)) {
+    ifstat_error("dlpi: short read for ppa ack");
+    return 0;
+  }
+
+  /* copy buffer since used by later calls */
+  if ((buf = malloc(len)) == NULL) {
+    perror("malloc");
+    return 0;
+  }
+  memcpy(buf, (void *) ppa_ack, len);
+  ppa_ack = buf;
+  
+  /* browse interface list */
+  ofs = ppa_ack->dl_offset;
+  for(i = 0; i < ppa_ack->dl_count; i++) {
+    if (ofs < 0 || ofs + sizeof(dl_hp_ppa_info_t) > len) {
+      ifstat_error("dlpi: data returned by ppa ack exceeds data buffer");
+      free(buf);
+      return 0;
+    }
+
+    ppa_info = (dl_hp_ppa_info_t *) ((char *) ppa_ack + ofs);
+
+    if (dlpi_get_ifmib(dlpi, ppa_info->dl_ppa, &mib)) {
+      sprintf(ifname, "%s%d", ppa_info->dl_module_id_1, ppa_info->dl_instance_num);
+      if (!mapf(&mib, ppa_info->dl_ppa, ifname, mdata)) {
+	free(buf);
+	return 0;
+      }
+    }
+    
+    ofs = ppa_ack->dl_offset + ppa_info->dl_next_offset;
+  }
+
+  free(buf);
+  return 1;
+}
+
+static int dlpi_map_scan(mib_ifEntry *mib, int ppa, char *name,
+			void *mdata) {
+  examine_interface((struct ifstat_list *) mdata, name,
+		    (mib->ifOper == 1 ? IFF_UP : 0) |
+		    (mib->ifType == 24 ? IFF_LOOPBACK : 0), 0);
+  return 1;    
+}
+
+static int dlpi_scan_interfaces(struct ifstat_driver *driver,
+				struct ifstat_list *ifs) {
+  return dlpi_map_ifs(driver->data, &dlpi_map_scan, (void *) ifs);
+}
+
+static int dlpi_map_stats(mib_ifEntry *mib, int ppa, char *name,
+			  void *mdata) {
+  struct ifstat_data *cur;
+
+  if ((cur = ifstat_get_interface((struct ifstat_list *) mdata, name)) == NULL)
+    return 1;
+  ifstat_set_interface_stats(cur, mib->ifInOctets, mib->ifOutOctets);
+  ifstat_set_interface_index(cur, ppa);
+  return 1;
+}
+
+static int dlpi_get_stats(struct ifstat_driver *driver,
+			  struct ifstat_list *ifs) {
+  int i;
+  struct ifstat_data *cur;
+  mib_ifEntry mib;
+
+  if (ifs->flags & IFSTAT_HASINDEX) { /* poll by index (ppa) */
+    for (cur = ifs->first; cur != NULL; cur = cur->next) {
+      i = ifstat_get_interface_index(cur);
+      if (!dlpi_get_ifmib(driver->data, i, &mib))
+	continue;
+      ifstat_set_interface_stats(cur, mib.ifInOctets, mib.ifOutOctets);
+      ifstat_set_interface_index(cur, i);
+    }
+    return 1;
+  }
+
+  return dlpi_map_ifs(driver->data, &dlpi_map_stats, (void *) ifs);
+}    
+
+void dlpi_close_driver(struct ifstat_driver *driver) {
+  struct dlpi_driver_data *dlpi = driver->data;
+
+  free(dlpi->buf);
+  close(dlpi->fd);
+  free(dlpi);
+}
+#endif
+
+#ifdef USE_WIN32
+struct win32_driver_data {
+  void *buf;
+  int len;
+};
+
+static int win32_open_driver(struct ifstat_driver *driver, char *options) {
+  struct win32_driver_data *data;
+
+  if ((data = malloc(sizeof(struct win32_driver_data))) == NULL) {
+    ifstat_perror("malloc");
+    return 0;
+  }
+
+  data->buf = NULL;
+  data->len = 0;
+  driver->data = (void *) data;
+  return 1;
+}
+
+static int win32_getiftable(struct ifstat_driver *driver,
+			    PMIB_IFTABLE *iftable) {
+  struct win32_driver_data *data = driver->data;
+  ULONG size;
+  DWORD ret;
+
+  size = data->len;
+  while ((ret = GetIfTable((PMIB_IFTABLE) data->buf,
+			   &size, 1)) == ERROR_INSUFFICIENT_BUFFER) {
+    data->len = size * 2;
+    if ((data->buf = realloc(data->buf, data->len)) == NULL) {
+      perror("realloc");
+      return 0;
+    }
+  }
+  
+  if (ret == NO_ERROR) {
+    *iftable = (PMIB_IFTABLE) data->buf;
+    return 1;
+  }
+  
+  perror("GetIfTable");
+  return 0;
+}
+
+static int win32_scan_interfaces(struct ifstat_driver *driver,
+				 struct ifstat_list *ifs) {
+  PMIB_IFTABLE iftable;
+  DWORD i;
+  
+  if (!win32_getiftable(driver, &iftable))
+    return 0;
+
+  for (i = 0; i < iftable->dwNumEntries; i++) 
+    examine_interface(ifs,
+		      iftable->table[i].bDescr,
+		      ((iftable->table[i].dwOperStatus ==
+		       MIB_IF_OPER_STATUS_OPERATIONAL) ? IFF_UP : 0) |
+		      ((iftable->table[i].dwType ==
+		       MIB_IF_TYPE_LOOPBACK) ? IFF_LOOPBACK : 0), 0);
+
+  return 1;
+}
+
+static int win32_get_stats(struct ifstat_driver *driver,
+			   struct ifstat_list *ifs) {
+  PMIB_IFTABLE iftable;
+  DWORD i;
+  struct ifstat_data *cur;
+
+  if (!win32_getiftable(driver, &iftable))
+    return 0;
+
+  for (i = 0; i < iftable->dwNumEntries; i++) {
+    if ((cur = ifstat_get_interface(ifs, iftable->table[i].bDescr)) != NULL)
+      ifstat_set_interface_stats(cur,
+				 (unsigned long)
+				 iftable->table[i].dwInOctets,
+				 (unsigned long)
+				 iftable->table[i].dwOutOctets);
+  }
+  return 1;
+}
+
+void win32_close_driver(struct ifstat_driver *driver) {
+  struct win32_driver_data *data = driver->data;
+  
+  if (data->buf != NULL)
+    free(data->buf);
+  free(data);
+}
+#endif 
+
 static struct ifstat_driver drivers[] = {
 #ifdef USE_KSTAT  
   { "kstat", &kstat_open_driver, &ioctl_scan_interfaces, &kstat_get_stats,
@@ -858,6 +1367,14 @@ static struct ifstat_driver drivers[] = {
   { "proc", &proc_open_driver, &ioctl_scan_interfaces, &proc_get_stats,
     &proc_close_driver },
 #endif
+#ifdef USE_DLPI
+  { "dlpi", &dlpi_open_driver, &dlpi_scan_interfaces, &dlpi_get_stats,
+    &dlpi_close_driver },
+#endif
+#ifdef USE_WIN32
+  { "win32", &win32_open_driver, &win32_scan_interfaces,
+    &win32_get_stats, &win32_close_driver },
+#endif  
 #ifdef USE_SNMP  
   { "snmp", &snmp_open_driver, &snmp_scan_interfaces, &snmp_get_stats,
     &snmp_close_driver },

@@ -16,7 +16,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: ifstat.c,v 1.45 2003/04/19 02:08:56 gael Exp $
+ * $Id: ifstat.c,v 1.47 2003/11/22 01:27:51 gael Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -82,6 +82,50 @@ static void _setsig(int sig, RETSIGTYPE (*handler)(int)) {
 #else
 #define SIGNAL(si, handler) signal((si), (handler))
 #define RESIGNAL(si, handler) signal((si), (handler))
+#endif
+
+#ifndef HAVE_SNPRINTF
+/* bogus implementation with vsprintf */
+#ifdef HAVE_STDARG_H
+#include <stdarg.h>
+#endif
+#include <assert.h>
+
+int snprintf(char *str, size_t size, const char *format, ...) {
+  int res;
+  va_list ap;
+  
+  va_start(ap, format);
+  res = vsprintf(str, format, ap);
+  va_end(ap);
+  assert(res + 1 <= size);
+  return res;
+}
+#endif
+
+#ifdef WIN32
+/* native win32 misses gettimeofday and its select doesn't behave
+   the same way, so replace them by bogus versions that work
+   as expected here */
+#include <windows.h>
+#include <sys/timeb.h>
+
+static int win_select(int nfds, void *fdr, void *fdw, void *fde,
+		      struct timeval *tv) {
+  Sleep(tv->tv_sec * 1000 + tv->tv_usec / 1000);
+  return 0;
+}
+#define select win_select
+
+static int win_gettimeofday(struct timeval *tv, void *tz) {
+  struct _timeb timeb;
+
+  _ftime(&timeb);
+  tv->tv_sec = timeb.time;
+  tv->tv_usec = timeb.millitm * 1000;
+  return 0;
+}
+#define gettimeofday win_gettimeofday
 #endif
 
 /* parse interface list, using \ as escape character */
@@ -169,10 +213,12 @@ static RETSIGTYPE update_termsize(int sig) {
 }
 
 int _sigcont = 0;
+#ifdef SIGCONT
 static RETSIGTYPE sigcont(int sig) {
   _sigcont = 1;  
   RESIGNAL(SIGCONT, &sigcont);
 }
+#endif
 
 #define OPT_TIMESTAMP  1
 #define OPT_FIXEDWIDTH 2
@@ -579,9 +625,11 @@ int main(int argc, char **argv) {
     SIGNAL(SIGWINCH, &update_termsize);
 #endif
   }
+#ifdef SIGCONT
   /* register SIGCONT for redisplay of header */
   if (!(options & OPT_NOTITLE) || (options & OPT_NOSCROLL))
     SIGNAL(SIGCONT, &sigcont);
+#endif  
   
   print_header(&ifs, options);
   lasthdr = 1;

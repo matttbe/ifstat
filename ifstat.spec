@@ -1,9 +1,9 @@
 # Time-stamp: <01/12/25 14:04:41 ifstat.spec wbosse@berlin.snafu.de>
-# $Id: ifstat.spec,v 1.8 2003/04/21 21:26:00 gael Exp $
+# $Id: ifstat.spec,v 1.9 2004/01/01 19:16:59 gael Exp $
 
 Name: ifstat
 Summary: InterFace STATistics
-Version: 1.0
+Version: 1.1
 Release: 1
 Group: Applications
 Copyright: GPL

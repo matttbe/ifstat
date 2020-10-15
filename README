@@ -12,8 +12,11 @@ few operating systems are supported right now:
    Solaris with kstat(3K) interface (Solaris >= 2.6.x)
    FreeBSD with ifmib(4) interface (FreeBSD > 2.2)
    IRIX and OpenBSD with SIOCGIFDATA ioctl(2).
-   BSD like systems with route sysctl(3) interface.
+   BSD like systems with route sysctl(3) interface (NetBSD, Darwin).
    BSD like systems with kvm(3) interface.
+   Digital Unix (OSF/1), AIX with "legacy" kmem interface.
+   HP-UX with DLPI streams interface.
+   Win32 (native or with cygwin) with GetIfTable interface.
 
 Others might be easy to add, or might simply work out-of-the-box if
 some compatibility layer is there. As usual your mileage may vary.
@@ -25,12 +28,20 @@ known method works (You need to have snmpd running for this though).
 * Compilation
 
 To compile, just run the configure script as follows:
+(Refer to the INSTALL file for generic configure instructions)
 
    ./configure
 
-You might need to pass several options to the configure script. Refer
-to the INSTALL file for generic configure instructions. This package
-accepts the following extra-options:
+You might need to set several variables for the configure script 
+on some systems:
+
+   - On HP-UX, if using the HP C Compiler, add CC="cc -Ae" so that
+     ANSI C syntax is accepted.
+   - On Windows, you might want to add CC="gcc -mno-cygwin" under 
+     Cygwin to build a native win32 binary.
+
+You might also need to pass several options to the configure script. 
+This package accepts the following extra-options:
 
    --enable-debug     This turns debugging on in the library.
    --enable-optim     This turns on some gcc optimization flags.
@@ -53,6 +64,10 @@ included. If you wish to force inclusion of an alternate driver
    --without-route    Do not include support for route.
    --with-kvm         Force support of kvm if available.
    --without-kvm      Do not include support for kvm.
+   --with-dlpi        Force support of dlpi if available.
+   --without-dlpi     Do not include support for dlpi.
+   --with-win32       Force support of wiN32 if available.
+   --without-win32    Do not include support for win32.
    --with-snmp=prefix Specify where the snmp library is installed
    --without-snmp     Do not include support for SNMP.
    --with-libcrypto   Force use of libcrypto with UCD-SNMP. This is needed
@@ -74,3 +89,9 @@ Simply run ifstat and see stats rolling ;)
 * Homepage
 
 http://gael.roualland.free.fr/ifstat/
+
+* Feedback
+
+If you're happy with ifstat, I'd be glad to hear from you and know
+what you use it for and on which systems. Bugs reports are welcomed
+too! Thanks.

@@ -9,8 +9,17 @@
 /* Define if you can safely include both <sys/time.h> and <time.h>.  */
 #undef TIME_WITH_SYS_TIME
 
+/* Define if you have the knlist function.  */
+#undef HAVE_KNLIST
+
+/* Define if you have the readx function.  */
+#undef HAVE_READX
+
 /* Define if you have the sigaction function.  */
 #undef HAVE_SIGACTION
+
+/* Define if you have the snprintf function.  */
+#undef HAVE_SNPRINTF
 
 /* Define if you have the <ctype.h> header file.  */
 #undef HAVE_CTYPE_H
@@ -51,14 +60,35 @@
 /* Define if you have the <net/soioctl.h> header file.  */
 #undef HAVE_NET_SOIOCTL_H
 
+/* Define if you have the <nlist.h> header file.  */
+#undef HAVE_NLIST_H
+
+/* Define if you have the <paths.h> header file.  */
+#undef HAVE_PATHS_H
+
 /* Define if you have the <signal.h> header file.  */
 #undef HAVE_SIGNAL_H
 
 /* Define if you have the <stdarg.h> header file.  */
 #undef HAVE_STDARG_H
 
+/* Define if you have the <stropts.h> header file.  */
+#undef HAVE_STROPTS_H
+
+/* Define if you have the <sys/dlpi.h> header file.  */
+#undef HAVE_SYS_DLPI_H
+
+/* Define if you have the <sys/dlpi_ext.h> header file.  */
+#undef HAVE_SYS_DLPI_EXT_H
+
 /* Define if you have the <sys/ioctl.h> header file.  */
 #undef HAVE_SYS_IOCTL_H
+
+/* Define if you have the <sys/mbuf.h> header file.  */
+#undef HAVE_SYS_MBUF_H
+
+/* Define if you have the <sys/mib.h> header file.  */
+#undef HAVE_SYS_MIB_H
 
 /* Define if you have the <sys/param.h> header file.  */
 #undef HAVE_SYS_PARAM_H
@@ -108,14 +138,29 @@
 /* Define this if you want to use roue(4) sysctl to get stats */
 #undef USE_ROUTE
 
+/* Define if knlist needs 3 arguments */
+#undef HAVE_KNLIST_ARGS3
+
+/* Define if you have the kvm(3) interface */
+#undef HAVE_KVM
+
 /* Define if you have a if_xname member in struct ifnet */
 #undef HAVE_IFNET_IF_XNAME
+
+/* Define if you have a if_next member in struct ifnet */
+#undef HAVE_IFNET_IF_NEXT
 
 /* Define if you have a if_link member in struct ifnet */
 #undef HAVE_IFNET_IF_LINK
 
 /* Define if you want to use kvm to get stats */
 #undef USE_KVM
+
+/* Define if you want to use dlpi to get stats */
+#undef USE_DLPI
+
+/* Define if you want to use win32 to get stats */
+#undef USE_WIN32
 
 /* Define if you want to use ioctls to get if list */
 #undef USE_IOCTL
@@ -126,11 +171,11 @@
 /* Define if you want ot use if_nameindex to find interfaces */
 #undef USE_IFNAMEINDEX
 
-/* Define if your SNMP implementation is net-snmp v5.0 or greater */
-#undef HAVE_NET_SNMP
-
 /* Define if you have SNMP support */
 #undef USE_SNMP
+
+/* Define if your SNMP implementation is net-snmp v5.0 or greater */
+#undef HAVE_NET_SNMP
 
 /* Version */
 #undef VERSION

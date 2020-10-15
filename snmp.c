@@ -16,7 +16,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: snmp.c,v 1.25 2003/04/21 20:45:13 gael Exp $
+ * $Id: snmp.c,v 1.26 2003/05/06 23:30:02 gael Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -187,7 +187,7 @@ static int snmp_get_ifinfos(struct snmp_session *ss, int nifaces,
     ifinfo[10] = ifsnmp[i].index;
 
     if (flags & S_NUMNAME) {
-      snprintf(ifsnmp[i].name, sizeof(ifsnmp[i].name), "if%d", ifsnmp[i].index);
+      sprintf(ifsnmp[i].name, "if%d", ifsnmp[i].index);
     } else if (flags & S_IFNAME) {
       /* require descr */
       ifinfo[9] = ifDescr;

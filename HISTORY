@@ -4,6 +4,15 @@ Gaël Roualland <gael.roualland@dial.oleane.com>
 
 Releases History:
 
+* v1.1 - 01/01/2004 "The Happy New Year Release"
+  - Digital Unix (OSF/1) and Tru64 support.
+  - AIX support (tested on AIX v4.3).
+  - HP-UX support with DLPI streams interface.
+    (sample code contributed by Jean-Marc Saffroy <gtm@users.sf.net>)
+  - Win32 support (native or with cygwin) with GetIfTable interface.
+    (sample code contributed by Alexandre Raclot <alex@raclot.org>)
+  - Use net-snmp-config if present to find out SNMP flags.
+
 * v1.0 - 21/04/2003 "The Easter Release"
   - SIOCGIFDATA ioctl(2) support for IRIX and OpenBSD.
     (allows stats for non root users on OpenBSD).

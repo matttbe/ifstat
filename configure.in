@@ -1,6 +1,6 @@
 dnl configure.in for ifstat
 dnl Process this file with autoconf to create configure
-dnl $Id: configure.in,v 1.44 2003/04/21 21:15:42 gael Exp $
+dnl $Id: configure.in,v 1.51 2003/11/22 01:27:51 gael Exp $
 AC_INIT(ifstat.c)
 
 AC_ARG_ENABLE(debug,   [  --enable-debug          setup flags (gcc) for debugging (default=no)],
@@ -25,9 +25,9 @@ AC_PROG_RANLIB
 AC_HEADER_STDC
 AC_CHECK_HEADERS(sys/time.h)
 AC_HEADER_TIME
-AC_CHECK_HEADERS(unistd.h ctype.h sys/types.h sys/param.h net/if.h net/if_var.h net/if_types.h sys/socket.h sys/ioctl.h sys/sockio.h net/soioctl.h sys/termios.h errno.h signal.h stdarg.h limits.h)
+AC_CHECK_HEADERS(unistd.h ctype.h sys/types.h sys/param.h sys/mbuf.h net/route.h net/if.h net/if_var.h net/if_types.h sys/socket.h sys/ioctl.h sys/sockio.h net/soioctl.h sys/termios.h errno.h signal.h stdarg.h limits.h fcntl.h)
 AC_TYPE_SIGNAL
-AC_CHECK_FUNCS(sigaction)
+AC_CHECK_FUNCS(sigaction snprintf)
 
 # Options for various drivers
 # auto means try if no other found, no disables, and anything else is try.
@@ -43,6 +43,10 @@ AC_ARG_WITH(route, [  --with-route            include route(4) sysctl support (d
             [], [with_route=auto])
 AC_ARG_WITH(kvm,  [  --with-kvm              include kvm(3) support (default=auto)],
             [], [with_kvm=auto])
+AC_ARG_WITH(dlpi,  [  --with-dlpi             include HP DLPI support (default=auto)],
+            [], [with_dlpi=auto])
+AC_ARG_WITH(win32,  [  --with-win32            include Win32 support (default=auto)],
+            [], [with_win32=auto])
 AC_ARG_WITH(snmp, [  --with-snmp[=PREFIX]    include UCD-SNMP support (default=yes)],
             [], [with_snmp=yes])
 with_ioctl=no # only enabled if needed by other drivers
@@ -71,7 +75,7 @@ fi
 test "x$with_kstat" = "xauto" -a "x$local" = "xyes" && with_kstat=no
 if test "x$with_kstat" != "xno"; then
   AC_CHECK_FUNC(kstat_open, with_kstat=yes, with_kstat=no)
-  if test "x$withkstat" != "xyes" ; then
+  if test "x$with_kstat" != "xyes" ; then
     case "x$LIBS" in
       *-lkstat*) ;;
       *) AC_CHECK_LIB(kstat, kstat_open, [LIBS="$LIBS -lkstat"; with_kstat=yes]) ;;
@@ -174,7 +178,7 @@ fi
 # checking for route sysctl (*BSDs)
 test "x$with_route" = "xauto" -a "x$local" = "xyes" && with_route=no
 if test "x$with_route" != "xno"; then
-  AC_CHECK_HEADERS(sys/sysctl.h net/route.h net/if_dl.h)
+  AC_CHECK_HEADERS(sys/sysctl.h net/if_dl.h)
   AC_CHECK_FUNC(sysctl, with_route=yes, with_route=no)
   if test "x$with_route" = "xyes"; then
     AC_MSG_CHECKING([for route info sysctl])
@@ -210,17 +214,50 @@ fi
 # checking for kvm (*BSDs)
 test "x$with_kvm" = "xauto" -a "x$local" = "xyes" && with_kvm=no
 if test "x$with_kvm" != "xno"; then
-  AC_CHECK_FUNC(kvm_open, with_kvm=yes, with_kvm=no)
+  AC_CHECK_FUNC(kvm_openfiles, with_kvm=yes, with_kvm=no)
   if test "x$with_kvm" != "xyes" ; then
     case "x$LIBS" in
      *-lkvm*) ;;
-     *) AC_CHECK_LIB(kvm, kvm_open, [LIBS="$LIBS -lkvm"; with_kvm=yes]) ;;
+     *) AC_CHECK_LIB(kvm, kvm_openfiles, [LIBS="$LIBS -lkvm"; with_kvm=yes]) ;;
     esac
   fi
+  if test "x$with_kvm" != "xyes"; then
+    # see if emulation is possible
+    AC_CHECK_HEADERS(nlist.h, [
+      AC_CHECK_FUNCS(knlist, [
+        with_kvm=yes
+        AC_MSG_CHECKING([whether knlist takes 3 arguments])
+        AC_TRY_COMPILE([#include <nlist.h>],[knlist((struct nlist *) 0, 0, 10);],
+                       knlist3=yes, knlist3=no)
+        AC_MSG_RESULT([$knlist3])
+        if test "x$knlist3" = "xyes"; then
+	  AC_DEFINE([HAVE_KNLIST_ARGS3], 1,
+		    [Define if knlist needs 3 arguments])
+        fi
+      ], [AC_CHECK_FUNC(nlist, [with_kvm=yes])])
+    ])
+    if test "x$with_kvm" = "xyes"; then
+      AC_CHECK_FUNCS(readx)
+      AC_CHECK_HEADERS(paths.h)
+    fi
+  else
+    AC_CHECK_HEADERS(kvm.h)
+    AC_DEFINE([HAVE_KVM], 1, [Define if you have the kvm(3) interface])
+  fi
   if test "x$with_kvm" = "xyes"; then
-    AC_CHECK_HEADERS(fcntl.h kvm.h)
-
-    AC_MSG_CHECKING([for ifnet if_xname member])
+    AC_MSG_CHECKING([whether struct ifnet has needed interface data])
+    AC_TRY_COMPILE([#include <sys/types.h>
+                    #include <sys/socket.h>
+		    #include <net/if.h>
+		    #ifdef HAVE_NET_IF_VAR_H
+		    #include <net/if_var.h>
+		    #endif],[struct ifnet in; in.if_ibytes = in.if_obytes;
+                             in.if_type = in.if_flags],
+                   with_kvm=yes, with_kvm=no)
+    AC_MSG_RESULT([$with_kvm])
+  fi
+  if test "x$with_kvm" = "xyes"; then
+    AC_MSG_CHECKING([for struct ifnet if_xname member])
     AC_TRY_COMPILE([#include <sys/types.h>
                     #include <sys/socket.h>
 		    #include <net/if.h>
@@ -232,23 +269,81 @@ if test "x$with_kvm" != "xno"; then
 	[Define if you have a if_xname member in struct ifnet])
     AC_MSG_RESULT([$ifxname])
 
-    AC_MSG_CHECKING([for ifnet if_link member])
+    AC_MSG_CHECKING([for struct ifnet if_next member])
     AC_TRY_COMPILE([#include <sys/types.h>
                     #include <sys/socket.h>
 		    #include <net/if.h>
 		    #ifdef HAVE_NET_IF_VAR_H
 		    #include <net/if_var.h>
-		    #endif],[struct ifnet in; in.if_link;],
-                   iflink=yes, iflink=no)
-    test "x$iflink" = "xyes" && AC_DEFINE([HAVE_IFNET_IF_LINK], 1,
-	[Define if you have a if_link member in struct ifnet])
-    AC_MSG_RESULT([$iflink])
+		    #endif],[struct ifnet in; in.if_next;],
+                   ifnext=yes, ifnext=no)
+    AC_MSG_RESULT([$ifnext])
+    if test "x$ifnext" = "xyes"; then
+        AC_DEFINE([HAVE_IFNET_IF_NEXT], 1,
+                  [Define if you have a if_next member in struct ifnet])
+    else 
+      AC_MSG_CHECKING([for struct ifnet if_link member])
+      AC_TRY_COMPILE([#include <sys/types.h>
+                      #include <sys/socket.h>
+	 	      #include <net/if.h>
+  		      #ifdef HAVE_NET_IF_VAR_H
+		      #include <net/if_var.h>
+		      #endif],[struct ifnet in; in.if_link;],
+                     iflink=yes, iflink=no)
+      test "x$iflink" = "xyes" && AC_DEFINE([HAVE_IFNET_IF_LINK], 1,
+	  [Define if you have a if_link member in struct ifnet])
+      AC_MSG_RESULT([$iflink])
+    fi
 
     AC_DEFINE([USE_KVM], 1, [Define if you want to use kvm to get stats])
     AC_MSG_WARN([you might need to make ifstat SGID kmem to run as simple user])
     local=yes
   fi
 fi
+
+# checking for hp dlpi interface
+test "x$with_dlpi" = "xauto" -a "x$local" = "xyes" && with_dlpi=no
+if test "x$with_dlpi" != "xno"; then
+  AC_CHECK_HEADERS(sys/dlpi.h sys/dlpi_ext.h stropts.h sys/mib.h)
+  AC_MSG_CHECKING([for dlpi streams interface])
+  AC_TRY_COMPILE([#ifdef HAVE_UNISTD_H
+		  #include <unistd.h>
+                  #endif
+                  #ifdef HAVE_SYS_DLPI_H
+                  #include <sys/dlpi.h>
+                  #endif
+                  #ifdef HAVE_SYS_DLPI_EXT_H
+                  #include <sys/dlpi_ext.h>
+                  #endif
+                  #ifdef HAVE_STROPTS_H
+                  #include <sys/stropts.h>
+                  #endif
+                  #ifdef HAVE_SYS_MIB_H
+                  #include <sys/mib.h>
+                  #endif], [mib_ifEntry mib; dl_hp_ppa_req_t req;
+                  struct strbuf ctlptr; putmsg(0, &ctlptr, NULL, 0);],
+		with_dlpi=yes, with_dlpi=no)
+  AC_MSG_RESULT([$with_dlpi])
+  if test "x$with_dlpi" = "xyes"; then
+    AC_DEFINE([USE_DLPI], 1, [Define if you want to use dlpi to get stats])
+    local=yes
+  fi
+fi
+
+test "x$with_win32" = "xauto" -a "x$local" = "xyes" && with_win32=no
+if test "x$with_win32" != "xno"; then
+  AC_MSG_CHECKING([for win32 GetIfTable interface])
+  OLIBS="$LIBS"
+  LIBS="$LIBS -liphlpapi"
+  AC_TRY_LINK([#include <windows.h>
+               #include <iphlpapi.h>], [GetIfTable(NULL, NULL, 0);],
+	       [with_win32=yes], [with_win32=no; LIBS="$OLIBS"])
+  AC_MSG_RESULT([$with_win32])
+  if test "x$with_win32" = "xyes"; then
+    AC_DEFINE([USE_WIN32], 1, [Define if you want to use win32 to get stats])
+    local=yes
+  fi
+fi  
 
 # checking for ioctl (siocgifconf) to get interfaces
 test "x$with_ioctl" = "xauto" -a "x$local" = "xyes" && with_ioctl=no
@@ -287,58 +382,70 @@ fi
 if test "x$with_snmp" != "xno" ; then
   OCPPFLAGS="$CPPFLAGS"
   OLDFLAGS="$LDFLAGS"
-  if test "x$with_snmp" != "xyes" ; then
-    CPPFLAGS="$CPPFLAGS -I$with_snmp/include"
-    LDFLAGS="$LDFLAGS -L$with_snmp/lib"
-  fi
-  AC_CHECK_HEADER(net-snmp/net-snmp-config.h, with_snmp=net,
-		  [AC_CHECK_HEADER(ucd-snmp/ucd-snmp-config.h,
-                                  with_snmp=ucd, with_snmp=no)])
+  snmp_ok=no
 
-  if test "x$with_snmp" != "xno"; then
-    if test "x$with_snmp" = "xnet"; then
-       AC_DEFINE([HAVE_NET_SNMP], 1,
-	         [Define if your SNMP implementation is net-snmp v5.0 or greater])
-       libsnmp="-lnetsnmp"
+  AC_PATH_PROG(netsnmpconfig, [net-snmp-config], [no], $PATH:$with_snmp)
+  if test "x$netsnmpconfig" != "xno"; then
+    CPPFLAGS="$CPPFLAGS `$netsnmpconfig --base-cflags 2>/dev/null`"
+    LDFLAGS="$LDFLAGS `$netsnmpconfig --libs 2>/dev/null`"
+    AC_MSG_CHECKING([whether net-snmp-config hints compiles and links fine])
+    AC_TRY_LINK([#include<net-snmp/net-snmp-config.h>], [snmp_sess_init((void *) 0);],
+                [snmp_ok=yes], [snmp_ok=no])
+    AC_MSG_RESULT([$snmp_ok])
+    if test "x$snmp_ok" = "xyes"; then
+      with_snmp=yes
+      snmp_type=net
     else
-       libsnmp="-lsnmp"
+      CPPFLAGS="$OCPPFLAGS"
+      LDFLAGS="$OLDFLAGS"
     fi
+  fi
 
-    with_snmp=no
-    SNMPLIBALONE="$libsnmp"
-    # Setting to be able to force linking with -lcrypto....
-    # This is needed on OpenBSD (at least) where the snmplib port links without -lcrypto,
-    # but fails to run.
-    AC_ARG_WITH(libcrypto,
-                [  --with-libcrypto        force link with -lcrypto for UCD-SNMP (default=no)],
-	        [], [with_libcrypto=no])
-    if test "x$with_libcrypto" = "xyes" ; then
-      SNMPLIBALONE=""
+  if test "x$snmp_ok" != "xyes"; then
+    if test "x$with_snmp" != "xyes" ; then
+      CPPFLAGS="$CPPFLAGS -I$with_snmp/include"
+      LDFLAGS="$LDFLAGS -L$with_snmp/lib"
     fi
-    for lib in $SNMPLIBALONE "$libsnmp -lcrypto" ; do
-      if test "x$with_snmp" != "xyes" ; then
-        AC_MSG_CHECKING([for snmp support in $lib])
-        OLIBS="$LIBS"
-        LIBS="$LIBS $lib"
-        AC_TRY_LINK([#include <unistd.h>
-                     #include <sys/types.h>
-                     #include <sys/socket.h>
-                     #include <netinet/in.h>
-		     #ifdef HAVE_NET_SNMP
-                     #include <net-snmp/net-snmp-config.h>
-                     #include <net-snmp/net-snmp-includes.h>
-		     #else
-                     #include <ucd-snmp/ucd-snmp-config.h>
-                     #include <ucd-snmp/ucd-snmp-includes.h>
-		     #endif],
-	            [struct snmp_session s; snmp_sess_init(&s);],
-                    [with_snmp=yes], [LIBS="$OLIBS"])
-        AC_MSG_RESULT([$with_snmp])
+    AC_CHECK_HEADER(net-snmp/net-snmp-config.h, snmp_type=net,
+	  	    [AC_CHECK_HEADER(ucd-snmp/ucd-snmp-config.h,
+                                     snmp_type=ucd, with_snmp=no)])
+
+    if test "x$with_snmp" != "xno"; then
+      if test "x$snmp_type" = "xnet"; then
+         libsnmp="-lnetsnmp"
+      else
+         libsnmp="-lsnmp"
       fi
-    done
+
+      with_snmp=no
+      SNMPLIBALONE="$libsnmp"
+      # Setting to be able to force linking with -lcrypto....
+      # This is needed on OpenBSD (at least) where the snmplib port links without -lcrypto,
+      # but fails to run.
+      AC_ARG_WITH(libcrypto,
+                  [  --with-libcrypto        force link with -lcrypto for UCD-SNMP (default=no)],
+	          [], [with_libcrypto=no])
+      if test "x$with_libcrypto" = "xyes" ; then
+        SNMPLIBALONE=""
+      fi
+      for lib in $SNMPLIBALONE "$libsnmp -lcrypto" ; do
+        if test "x$with_snmp" != "xyes" ; then
+          AC_MSG_CHECKING([for snmp support in $lib])
+          OLIBS="$LIBS"
+          LIBS="$LIBS $lib"
+          AC_TRY_LINK([], [snmp_sess_init();],
+                      [with_snmp=yes], [LIBS="$OLIBS"])
+          AC_MSG_RESULT([$with_snmp])
+        fi
+      done
+    fi
   fi
   if test "x$with_snmp" = "xyes" ; then
     AC_DEFINE([USE_SNMP], 1, [Define if you have SNMP support])
+    if test "x$snmp_type" = "xnet"; then
+       AC_DEFINE([HAVE_NET_SNMP], 1,
+	         [Define if your SNMP implementation is net-snmp v5.0 or greater])
+    fi
     SNMPSRC=snmp.c
     AC_SUBST(SNMPSRC)
     # hint users about the possible needed option

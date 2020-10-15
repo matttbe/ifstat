@@ -122,6 +122,14 @@ This driver gets statistics by reading the kernel live structures. It accepts an
 
 Note that for this driver to work, ifstat needs to have read access to the system memory device. This is usually done by running it as root, or by installing setgid mem or kmem. ifstat will NOT install setgid by default; It is up to you to decide if you trust it.
 
+=item B<dlpi>
+
+This driver gets statistics using the DLPI streams interface available on HP-UX. An alternate device to query statistics from can be passed as the option (default is /dev/dlpi).
+
+=item B<win32>
+
+This driver gets statistics using the GetIfTable interface available on Win32 systems. It doesn't accept any options.
+
 =item B<snmp>
 
 This driver gets statistics through SNMP. The option, in the form [comm@][#]host[/nn]], specifies the host and eventual community to poll. Default community is public, but can be changed by prepending "comm@" to the hostname. If host starts by a #, interface names are generated from their index as `ifNN' (this is a workaround for some equipments that give all interfaces the same description). Default host is localhost, and this will be used by default if snmp is the only available driver.
