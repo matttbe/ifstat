@@ -1,0 +1,56 @@
+=head1 NAME
+
+ifstat - Report InterFace STATistics
+
+=head1 SYNOPSIS
+
+B<ifstat> [B<-i> if0,if1,...] [B<-s> [comm@][#]host] [B<-h>] [B<-n>] [B<-v>] [delay [count]]
+
+=head1 DESCRIPTION
+
+Ifstat is a little tool to report interface activity in KBps, just like iostat/vmstat do for other system statistics.
+
+=head1 OPTIONS
+
+B<ifstat> accepts the following options:
+
+=over 4
+
+=item B<-i>
+
+Specifies the list of interfaces to monitor, separated by commas (if an interface name has a comma, it can be escaped with '\'). By default B<ifstat> monitors all interfaces that are up.
+
+=item B<-s>
+
+Specifies a host to poll through SNMP to get stats. Default community is public, but can be changed by prepending "comm@" to the hostname. If host starts by a #, interface names are generated from their index as `ifNN' (this is a workaround for some equipments that give all interfaces the same description).
+
+=item B<-h>
+
+Displays a short help message.
+
+=item B<-n>
+
+Turns off displaying the header periodically.
+
+=item B<-v>
+
+Displays version information.
+
+=item B<delay>
+
+B<delay> is the delay between updates in seconds, which defaults to 1.
+A decimal number can be specified for intervals shorter than a second. (minimum 0.1)
+
+=item B<count>
+
+B<count> is the number of updates before stopping. If not specified, it is unlimited.
+
+=back
+
+=head1 SEE ALSO
+
+vmstat(1), iostat(1)
+
+=head1 AUTHOR
+
+Gaël Roualland, <gael.roualland@iname.com>

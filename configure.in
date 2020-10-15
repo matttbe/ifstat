@@ -1,0 +1,164 @@
+dnl configure.in for ifstat
+dnl Process this file with autoconf to create configure
+dnl $Id: configure.in,v 1.14 2001/12/24 01:15:49 gael Exp $
+AC_INIT(ifstat.c)
+
+AC_ARG_ENABLE(debug,   [  --enable-debug          setup flags (gcc) for debugging (default=no)],
+CFLAGS="$CFLAGS -O2 -Wall -g"
+CPPFLAGS="$CPPFLAGS -DDEBUG"
+LDFLAGS="$LDFLAGS",)
+AC_ARG_ENABLE(optim,   [  --enable-optim          setup flags (gcc) for optimizations (default=no)],
+if test "x$enable_debug" != "xyes" ; then
+  CFLAGS="$CFLAGS -O3 -ffast-math -fomit-frame-pointer -funroll-loops -g0"
+  LDFLAGS="$LDFLAGS -s"
+else
+  AC_MSG_WARN([enable-optim and enable-debug are incompatible -- disabling optimizations])
+fi,)
+
+AC_CONFIG_HEADER(config.h)
+
+dnl Programs
+AC_PROG_INSTALL
+AC_PROG_CC
+
+AC_HEADER_STDC
+AC_CHECK_HEADERS(sys/time.h)
+AC_HEADER_TIME
+AC_CHECK_HEADERS(unistd.h ctype.h sys/types.h net/if.h sys/socket.h sys/ioctl.h sys/termios.h) 
+# checking snmp
+AC_ARG_WITH(snmp, [  --with-snmp=prefix      include UCD-SNMP support (default=yes if found)], [], [with_snmp=yes])
+if test "x$with_snmp" != "xno" ; then
+  OCFLAGS="$CFLAGS"
+  OLDFLAGS="$LDFLAGS"
+  if test "x$with_snmp" != "xyes" ; then
+    CFLAGS="$CFLAGS -I$with_snmp/include"
+    LDFLAGS="$LDFLAGS -L$with_snmp/lib"
+  fi
+  with_snmp=no
+  for lib in "-lsnmp" "-lsnmp -lcrypto" ; do
+    if test "x$with_snmp" != "xyes" ; then
+      AC_MSG_CHECKING([for ucd-snmp in $lib])
+      OLIBS="$LIBS"
+      LIBS="$LIBS $lib"
+      AC_TRY_LINK([#include <unistd.h>
+                   #include <sys/types.h>
+                   #include <sys/socket.h>
+                   #include <netinet/in.h>
+	           #include <ucd-snmp/ucd-snmp-config.h>
+	           #include <ucd-snmp/ucd-snmp-includes.h>],
+                  [struct snmp_session s; snmp_open(&s);],
+                  [with_snmp=yes], [LIBS="$OLIBS"])
+      AC_MSG_RESULT([$with_snmp])
+    fi
+  done
+  if test "x$with_snmp" = "xyes" ; then
+    AC_DEFINE([HAVE_SNMP])
+  else
+    CFLAGS="$OCFLAGS"
+    LDFLAGS="$OLDFLAGS"
+  fi
+fi
+
+# checking for proc (Linux)
+AC_MSG_CHECKING([for /proc/net/dev interface])
+if grep -q Inter- /proc/net/dev 2>/dev/null; then
+  proc=yes
+  AC_DEFINE([USE_PROC])
+else
+  proc=no
+fi
+AC_MSG_RESULT([$proc])
+
+if test "x$proc" != "xyes" ; then
+  # checking for kstat (Solaris)
+  AC_CHECK_FUNC(kstat_open, kstat=yes, kstat=no)
+  if test "x$kstat" != "xyes" ; then
+    case "x$LIBS" in
+      *-lkstat*) ;;
+      *) AC_CHECK_LIB(kstat, kstat_open, [LIBS="$LIBS -lkstat"; kstat=yes]) ;;
+    esac
+  fi
+
+  if test "x$kstat" = "xyes" ; then
+    AC_CHECK_HEADERS(kstat.h)
+    AC_DEFINE([USE_KSTAT])
+  else
+    # checking for if_mib (FreeBSD)
+    AC_CHECK_HEADER(net/if_mib.h, [AC_CHECK_FUNC(sysctl, ifmib=yes, ifmib=no)], ifmib=no)
+    if test "x$ifmib" = "xyes"; then
+      AC_CHECK_HEADERS(sys/sysctl.h net/if_mib.h)
+      AC_DEFINE([USE_IFMIB])
+    else
+      # check for kvm
+      AC_CHECK_FUNC(kvm_open, kvm=yes, kvm=no)
+      if test "x$kvm" != "xyes" ; then
+        case "x$LIBS" in
+          *-lkvm*) ;;
+          *) AC_CHECK_LIB(kvm, kvm_open, [LIBS="$LIBS -lkvm"; kvm=yes]) ;;
+        esac
+      fi
+      if test "x$kvm" = "xyes"; then
+        AC_CHECK_HEADERS(fcntl.h kvm.h net/if_var.h)
+        AC_MSG_CHECKING([for ifnet if_xname member])
+        AC_TRY_COMPILE([#include <sys/types.h>
+                        #include <sys/socket.h>
+                        #include <net/if.h>],[struct ifnet in; in.if_xname[0] = 'a';],
+                 ifxname=yes, ifxname=no)
+        test "x$ifxname" = "xyes" && AC_DEFINE(HAVE_IFNET_IF_XNAME)
+        AC_MSG_RESULT([$ifxname])
+        AC_DEFINE([USE_KVM])
+        AC_MSG_WARN([you will need to make ifstat SGID kmem to run as simple user])
+      else
+        if test "x$with_snmp" = "xyes" ; then
+          snmp=yes
+          AC_DEFINE([USE_SNMP])
+          AC_MSG_WARN([no native stats gathering mechanism known; using SNMP.])
+        else
+          AC_MSG_ERROR([no statistics gathering methods found, porting needed.])
+        fi
+      fi
+    fi
+  fi
+fi
+
+# checking for siocgifconf (not if using if_mib, since that's builtin)
+if test "x$ifmib" != "xyes" -a "x$snmp" != "xyes"; then
+  AC_DEFINE([USE_IOCTL])
+  AC_CHECK_HEADERS(sys/sockio.h)
+  AC_CHECK_FUNC(socket, checksocket=no, checksocket=yes)
+  if test "x$checksocket" = "xyes"; then 
+    case "x$LIBS" in
+      *-lsocket*);;
+      *) AC_CHECK_LIB(socket, socket) ;;
+    esac
+  fi
+  AC_CHECK_FUNC(if_nameindex, ifnameindex=yes, ifnameindex=no)
+  if test "x$ifnameindex" != "xyes"; then 
+    case "x$LIBS" in
+      *-lsocket*);;
+      *) AC_CHECK_LIB(if_nameindex, nsl, [ifnameindex=yes; LIBS="$LIBS -lnsl"]) ;;
+    esac
+  fi
+  if test "x$ifnameindex" != "xyes"; then
+    AC_MSG_CHECKING([for sockaddr sa_len member])
+    AC_TRY_COMPILE([
+    #include <sys/types.h>
+    #include <sys/socket.h>],[struct sockaddr sa; sa.sa_len = 1;],
+                   salen=yes, salen=no)
+    test "x$salen" = "xyes" && AC_DEFINE(HAVE_SOCKADDR_SA_LEN)
+    AC_MSG_RESULT([$salen])
+  else
+    AC_DEFINE([USE_IFNAMEINDEX])
+  fi
+fi
+
+dnl Version
+VERSION="0.4"
+AC_DEFINE_UNQUOTED(VERSION, "$VERSION")
+
+dnl Output
+AC_SUBST(CFLAGS)
+AC_SUBST(CPPFLAGS)
+AC_SUBST(LDFLAGS)
+
+AC_OUTPUT(Makefile)

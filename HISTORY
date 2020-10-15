@@ -1,0 +1,27 @@
+InterFace STATistics
+Gaël Roualland <gael.roualland@iname.com>
+========================================= 
+
+Releases History:
+
+* v0.4 - 24/12/2001 "The Christmas Release"
+  - SNMP support through ucd-snmp if available.
+  - Removed syntax restrictions on interfaces names.
+  - Commas in interfaces names can be escaped.
+
+* v0.3 - 07/12/2001
+  - BSD-like kvm support.
+  - if_nameindex support.
+  - Smarter header reprinting (use terminal line number).
+  - Shorter delays available.
+  - No statistics information.
+
+* v0.2 - 04/12/2001
+  - FreeBSD ifmib, Solaris kstat support.
+  - Ioctl support to find interfaces.
+  - More precise measuring.
+  - autoconf, man pages, etc... 
+
+* v0.1 - 02/12/2001
+  - Initial implementation.
+  - Linux 2.2 > (/proc) support.

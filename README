@@ -1,0 +1,52 @@
+InterFace STATistics
+Gaël Roualland <gael.roualland@iname.com>
+=========================================
+
+* Introduction
+
+Ifstat is a little tool to report interface activity like vmstat/iostat do.
+Since gathering these statistics is highly system dependant, only a
+few operating systems are supported right now:
+
+   Linux with /proc/net/dev interface (Linux >= 2.2.x)
+   Solaris with kstat(3K) interface (Solaris >= 2.6.x)
+   FreeBSD with ifmib(4) interface (FreeBSD > 2.2)
+   BSDs with kvm(3) interface (tested on FreeBSD & OpenBSD)
+
+Others might be easy to add, or might simply work out-of-the-box if
+some compatibility layer is there. As usual your mileage may vary.
+
+In addition, ifstat can poll remote hosts through SNMP if you have
+the ucd-snmp library. It will also be used for localhost if no other
+known method works (You need to have snmpd running for this though).
+ 
+* Compilation
+
+To compile, just un the configure script as follows:
+
+   ./configure
+
+You might need to pass several options to the configure script. Refer
+to the INSTALL file for generic configure instructions. This package
+accepts the following extra-options:
+
+   --enable-debug     This turns debugging on in the library.
+   --enable-optim     This turns on some gcc optimization flags.
+   --with-snmp=prefix Specify where the snmp library is installed
+   --without-snmp     This turns off support for SNMP.
+
+Then, run the make command:
+
+   make
+
+and finally, to install it run:
+
+   make install
+
+* Usage
+
+Simply run ifstat and see stats rolling ;)
+
+* Homepage
+
+http://gael.roualland.free.fr/ifstat/

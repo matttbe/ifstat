@@ -1,0 +1,66 @@
+srcdir      = @srcdir@
+prefix      = @prefix@
+libdir      = @libdir@
+exec_prefix = @exec_prefix@
+datadir     = @datadir@
+bindir      = @bindir@
+mandir      = @mandir@
+etcdir      = @sysconfdir@
+
+SHELL       = /bin/sh
+CC          = @CC@
+RM          = rm -f
+INSTALL	    = @INSTALL@
+CFLAGS      = -I. @CFLAGS@ @DEFS@ @CPPFLAGS@
+LDFLAGS     = @LDFLAGS@
+LIBS        = @LIBS@
+SRCS        = ifstat.c drivers.c snmp.c
+OBJS        = ${SRCS:.c=.o} 
+TARGET      = ifstat
+
+.SUFFIXES: .c .o
+
+.c.o:
+	$(CC) $(CFLAGS) -c $< -o $@
+
+all: $(TARGET) Makefile ifstat.1
+
+$(TARGET) : $(OBJS)
+	$(CC) $(OBJS) $(LDFLAGS) $(LIBS) -o $(TARGET)
+
+clean:
+	$(RM) *.o *~ .*~ core \#*\# gmon.out *.bak $(TARGET)
+
+distclean: clean
+	$(RM) config.h config.cache config.log config.status Makefile
+
+maintainer-clean: distclean
+	$(RM) configure config.h.in
+
+${srcdir}/configure: configure.in
+	cd ${srcdir} && autoconf
+
+${srcdir}/config.h.in: configure.in acconfig.h
+	cd ${srcdir} && autoheader
+
+Makefile: Makefile.in config.status
+	CONFIG_FILES=Makefile CONFIG_HEADERS= ./config.status
+
+config.status: configure
+	./config.status --recheck
+
+ifstat.1: ifstat.pod
+	pod2man --center="System Utilities" --release=" " --lax --section=1 $< > $@
+
+install: all
+	$(INSTALL) -d -m 755 $(bindir)
+	$(INSTALL) -s -m 755 $(TARGET) $(bindir)/$(TARGET)
+	$(INSTALL) -d -m 755 $(mandir)/man1
+	$(INSTALL) -m 644 ifstat.1 $(mandir)/man1/ifstat.1
+
+realclean: maintainer-clean
+
+# deps
+ifstat.o: ifstat.c ifstat.h config.h
+drivers.o: drivers.c ifstat.h config.h
+snmp.o: snmp.c ifstat.h config.h
