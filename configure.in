@@ -59,16 +59,21 @@ if test "x$with_proc" != "xno"; then
      *) file=/proc/net/dev ;;
   esac
   AC_MSG_CHECKING([for proc interface in $file])
-  if grep -q Inter- $file 2>/dev/null; then
-    AC_DEFINE([USE_PROC], 1, [Define if you want to use /proc to get stats])
-    AC_DEFINE_UNQUOTED([PROC_FILE], ["$file"], [Proc file to poll for stats])
+  if test "$cross_compiling" = yes; then
+    with_proc=cross
+  elif grep -q Inter- $file 2>/dev/null; then
     with_proc=yes
-    with_ioctl=yes
-    local=yes
   else
     with_proc=no
   fi
   AC_MSG_RESULT([$with_proc])
+fi
+if test "x$with_proc" != "xno"; then
+  AC_DEFINE([USE_PROC], 1, [Define if you want to use /proc to get stats])
+  AC_DEFINE_UNQUOTED([PROC_FILE], ["$file"], [Proc file to poll for stats])
+  with_proc=yes
+  with_ioctl=yes
+  local=yes
 fi
 
 # checking for kstat (Solaris)
