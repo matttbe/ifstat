@@ -91,7 +91,7 @@ static int snmp_get_ifcount(struct snmp_session *ss) {
 
 static int snmp_get_nextif(struct snmp_session *ss, int index) {
   oid ifindex[] = { 1, 3, 6, 1, 2, 1, 2, 2, 1, 1, 0 };
-  int len = sizeof(ifindex) / sizeof(oid);
+  unsigned int len = sizeof(ifindex) / sizeof(oid);
   struct snmp_pdu *pdu;
   struct snmp_pdu *response = NULL;
   struct variable_list *vars;
@@ -139,7 +139,7 @@ static int snmp_get_nextif(struct snmp_session *ss, int index) {
 
 struct ifsnmp {
   char name[S_IFNAMEMAX];
-  unsigned long bout, bin;
+  unsigned long long bout, bin;
   int flags, index;
 };
 
@@ -248,7 +248,7 @@ static int snmp_get_ifinfos(struct snmp_session *ss, int nifaces,
     if (memcmp(ifinfo, vars->name, sizeof(ifinfo) - 2 * sizeof(oid)) != 0)
       continue;
     for(i = 0; i < nifaces; i++) {
-      if (ifsnmp[i].index == vars->name[10])
+	if ((signed long long)ifsnmp[i].index == (signed long long)vars->name[10])
 	break;
     }
 
@@ -258,11 +258,11 @@ static int snmp_get_ifinfos(struct snmp_session *ss, int nifaces,
     switch (vars->name[9]) {
     case ifDescr:
       if (vars->type == ASN_OCTET_STR) {
-        int count = vars->val_len;
+        unsigned int count = vars->val_len;
 
         if (count >= sizeof(ifsnmp[i].name))
           count = sizeof(ifsnmp[i].name) - 1;
-	strncpy(ifsnmp[i].name, vars->val.string, count);
+	strncpy(ifsnmp[i].name, (char *)vars->val.string, count);
         ifsnmp[i].name[count] = '\0';
       }
       break;
@@ -361,7 +361,7 @@ int snmp_open_driver(struct ifstat_driver *driver, char *options) {
   snmp_sess_init(&session);
   session.peername = host;
   session.version = SNMP_VERSION_1;
-  session.community = community;
+  session.community = (unsigned char *)community;
   session.community_len = strlen(community);
 
   if ((data->session = snmp_open(&session)) == NULL) {

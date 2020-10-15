@@ -1,7 +1,11 @@
-This package was debianized by Ga�l Roualland <gael.roualland@dial.oleane.com> on
+This package was debianized by Gaël Roualland <gael.roualland@dial.oleane.com> on
 Sun,  6 Jan 2002 01:39:24 +0100.
+The package was adopted by Goswin von Brederlow <brederlo@informatik.uni-tuebingen.de> on
+Sun, 13 Jun 2004 13:08:32 +0200.
 
-Copyright: GNU General Public License (GPL)
+Copyright: 2002 Gaël Roualland <gael.roualland@dial.oleane.com>
+License: GNU General Public License (GPL)
+Homepage: http://gael.roualland.free.fr/ifstat/
 
 On Debian GNU/Linux systems, the complete text of the GNU General
 Public License can be found in `/usr/share/common-licenses/GPL'.

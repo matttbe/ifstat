@@ -1,27 +1,97 @@
+ifstat (1.1-8.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Bump d/compat to 9 (Closes: #817499)
+
+ -- Tobias Frost <tobi@debian.org>  Sat, 24 Sep 2016 16:13:19 +0200
+
+ifstat (1.1-8) unstable; urgency=low
+
+  * New maintainer address.
+
+ -- Goswin von Brederlow <goswin-v-b@web.de>  Thu, 14 Feb 2008 14:23:23 +0100
+
+ifstat (1.1-7) unstable; urgency=low
+
+  * debian/control: Remove libsnmp9-dev alternative from Build-Depends
+  * debian/control: Fix spelling of bandwidth (Closes: #363957)
+  * debian/rules: Move DH_COMPAT setting to debian/compat
+  * Makefile.in: don't strip ifstat on install (Closes: #437199)
+  * debian/rules: fix lintian waring debian-rules-ignores-make-clean-error
+  * ifstat.1: Replace latin1 character with named character edieresis
+  * libifstat-config.1: Replace latin1 character with named character edieresis
+  * snmp.c: fix 2 pointer targets differ in signedness warnings
+  * Upgrade Standards-Version, no changes required
+
+ -- Goswin von Brederlow <brederlo@informatik.uni-tuebingen.de>  Mon, 13 Aug 2007 13:59:12 +0000
+
+ifstat (1.1-6) unstable; urgency=low
+
+  * Maintainer upload on behalf of the maintainer as requested.
+  * Rebuild only with no source changes, to rebuild against libsnmp10 on all
+    architectures and to clear out binNMUs using the old version number
+    scheme.
+
+ -- Steve Langasek <vorlon@debian.org>  Wed, 18 Jul 2007 22:54:22 -0700
+
+ifstat (1.1-5) unstable; urgency=low
+
+  * libifstat-dev: change section from devel to libdevel.
+    (sync with override file)
+
+ -- Goswin von Brederlow <brederlo@informatik.uni-tuebingen.de>  Thu, 13 Oct 2005 13:37:40 +0200
+
+ifstat (1.1-4) unstable; urgency=low
+
+  * Update to new libsnmp9 abi (Closes: 323348)
+
+ -- Goswin von Brederlow <brederlo@informatik.uni-tuebingen.de>  Thu, 13 Oct 2005 10:34:27 +0000
+
+ifstat (1.1-3) unstable; urgency=low
+
+  * Add copyright and homepage to debian/copyright.
+  * First upload to debian sid (Closes: #148218)
+
+ -- Goswin von Brederlow <brederlo@informatik.uni-tuebingen.de>  Sat, 31 Jul 2004 18:18:32 +0200
+
+ifstat (1.1-2) unstable; urgency=low
+
+  * Take over maintainership.
+  * Swap Build-Depends libsnmp5-dev | libsnmp-dev around.
+  * Adding upport for 64bit /proc/net/dev counters.
+  * Update standards version to 3.6.1.0.
+  * make non native package.
+  * Replace national chars in changelog.
+  * Build with --enable-debug.
+  * Add libifstat-config manpage.
+  * Clean up compiler warnings.
+
+ -- Goswin von Brederlow <brederlo@informatik.uni-tuebingen.de>  Sun, 13 Jun 2004 13:08:32 +0200
+
 ifstat (1.1-1) unstable; urgency=low
 
   * Upstream release.
 
- -- Gaël Roualland <gael.roualland@dial.oleane.com>  Thu,  1 Jan 2004 20:14:35 +0100
+ -- GaÃ«l Roualland <gael.roualland@dial.oleane.com>  Thu,  1 Jan 2004 20:14:35 +0100
 
 ifstat (1.0-1) unstable; urgency=low
 
   * Upstream release.
   * Support for building with net-snmp 5.0 and >
 
- -- Gaël Roualland <gael.roualland@dial.oleane.com>  Mon, 21 Apr 2003 23:22:17 +0200
+ -- GaÃ«l Roualland <gael.roualland@dial.oleane.com>  Mon, 21 Apr 2003 23:22:17 +0200
 
 ifstat (1.0rc3-1) unstable; urgency=low
 
   * Upstream release candidate. 
 
- -- Gaël Roualland <gael.roualland@dial.oleane.com>  Sat, 19 Apr 2003 02:50:02 +0200
+ -- GaÃ«l Roualland <gael.roualland@dial.oleane.com>  Sat, 19 Apr 2003 02:50:02 +0200
 
 ifstat (1.0rc2-1) unstable; urgency=low
 
   * Upstream release candidate. 
 
- -- Gaël Roualland <gael.roualland@dial.oleane.com>  Sun,  2 Feb 2003 19:15:53 +0100
+ -- GaÃ«l Roualland <gael.roualland@dial.oleane.com>  Sun,  2 Feb 2003 19:15:53 +0100
 
 ifstat (1.0rc1-1) unstable; urgency=low
 
@@ -29,7 +99,7 @@ ifstat (1.0rc1-1) unstable; urgency=low
   * Link libifstat-config.1 to undocumented. 
   * Add GPL location in copyright file.
 
- -- Gaël Roualland <gael.roualland@dial.oleane.com>  Sun,  2 Feb 2003 04:22:09 +0100
+ -- GaÃ«l Roualland <gael.roualland@dial.oleane.com>  Sun,  2 Feb 2003 04:22:09 +0100
 
 ifstat (1.0pre-1) unstable; urgency=low
 
@@ -37,26 +107,26 @@ ifstat (1.0pre-1) unstable; urgency=low
   * Created new libifstat-dev package
   * Updated build dependency on libsnmp-dev for future libsnmp packages.
 
- -- Gaël Roualland <gael.roualland@dial.oleane.com>  Fri, 20 Sep 2002 00:41:24 +0200
+ -- GaÃ«l Roualland <gael.roualland@dial.oleane.com>  Fri, 20 Sep 2002 00:41:24 +0200
 
 ifstat (0.5-2) unstable; urgency=low
 
   * Interim release for debian packaging (Closes: #148218)
   * Sponsored by Igor Genibel <igenibel@debian.org>
 
- -- Gaël Roualland <gael.roualland@dial.oleane.com>  Mon,  8 Jul 2002 00:30:44 +0200
+ -- GaÃ«l Roualland <gael.roualland@dial.oleane.com>  Mon,  8 Jul 2002 00:30:44 +0200
 
 ifstat (0.5-1) unstable; urgency=low
 
   * Upstream release
 
- -- Gaël Roualland <gael.roualland@dial.oleane.com>  Thu, 17 Jan 2002 00:07:12 +0100
+ -- GaÃ«l Roualland <gael.roualland@dial.oleane.com>  Thu, 17 Jan 2002 00:07:12 +0100
 
 ifstat (0.4-1) unstable; urgency=low
 
   * Initial Release.
 
- -- Gaël Roualland <gael.roualland@dial.oleane.com>  Sun,  6 Jan 2002 01:39:24 +0100
+ -- GaÃ«l Roualland <gael.roualland@dial.oleane.com>  Sun,  6 Jan 2002 01:39:24 +0100
 
 Local variables:
 mode: debian-changelog

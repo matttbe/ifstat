@@ -4,12 +4,12 @@ dnl $Id: configure.in,v 1.51 2003/11/22 01:27:51 gael Exp $
 AC_INIT(ifstat.c)
 
 AC_ARG_ENABLE(debug,   [  --enable-debug          setup flags (gcc) for debugging (default=no)],
-CFLAGS="$CFLAGS -O2 -Wall -g"
+CFLAGS="$CFLAGS -O2 -W -Wall -g"
 CPPFLAGS="$CPPFLAGS -DDEBUG"
 LDFLAGS="$LDFLAGS",)
 AC_ARG_ENABLE(optim,   [  --enable-optim          setup flags (gcc) for optimizations (default=no)],
 if test "x$enable_debug" != "xyes" ; then
-  CFLAGS="$CFLAGS -O3 -fomit-frame-pointer -g0"
+  CFLAGS="$CFLAGS -O3 -W -Wall -fomit-frame-pointer -g0"
   LDFLAGS="$LDFLAGS -s"
 else
   AC_MSG_WARN([enable-optim and enable-debug are incompatible -- disabling optimizations])

@@ -1,21 +1,22 @@
 Source: ifstat
+Section: net
 Priority: optional
-Maintainer: Gaël Roualland <gael.roualland@dial.oleane.com>
-Build-Depends: debhelper (>> 3.0.0), libsnmp-dev | libsnmp5-dev, libssl-dev
-Standards-Version: 3.5.2
+Maintainer: Goswin von Brederlow <goswin-v-b@web.de>
+Build-Depends: debhelper (>= 9), libsnmp-dev
+Standards-Version: 3.7.2.2
 
 Package: ifstat
 Section: net
 Architecture: any
-Depends: ${shlibs:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: InterFace STATistics Monitoring
- ifstat is a tool to report network interfaces bandwith just like 
+ ifstat is a tool to report network interfaces bandwidth just like 
  vmstat/iostat do for other system counters. It can monitor local
  interfaces by polling the kernel counters, or remote hosts 
  interfaces using SNMP. 
 
 Package: libifstat-dev
-Section: devel
+Section: libdevel
 Architecture: any
 Depends: libsnmp-dev
 Description: Ifstat Development Files

@@ -5,14 +5,18 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
-# This is the debhelper compatability version to use.
-export DH_COMPAT=4
+# DEB_BUILD_OPTIONS
+# This handles nostrip (via dh_strip) but not noopt. The configure.in
+# overrides CFLAGS and needs to be edited to disable optimisation.
 
 configure: configure-stamp
 configure-stamp:
 	dh_testdir
+	# avoid timestamp scews
+	touch Makefile.in
+	touch configure
 	# Add here commands to configure the package.
-	CPPFLAGS="-D_REENTRANT" ./configure --prefix=/usr --mandir="\$${prefix}/share/man" --infodir="\$${prefix}/share/info" --enable-optim --enable-library --with-libcrypto
+	CPPFLAGS="-D_REENTRANT" ./configure --prefix=/usr --mandir="\$${prefix}/share/man" --infodir="\$${prefix}/share/info" --enable-debug --enable-library --with-libcrypto
 
 	touch configure-stamp
 
@@ -31,7 +35,7 @@ clean:
 	rm -f build-stamp configure-stamp
 
 	# Add here commands to clean up after the build process.
-	-$(MAKE) distclean
+	[ ! -f Makefile ] || $(MAKE) distclean
 
 	dh_clean
 
@@ -57,7 +61,6 @@ binary-arch: build install
 	dh_installdocs -n
 	dh_installman
 	dh_installchangelogs 
-	dh_undocumented
 	dh_link
 	dh_strip
 	dh_compress

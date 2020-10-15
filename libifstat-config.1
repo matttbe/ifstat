@@ -1,0 +1,60 @@
+.ad l
+.nh
+.TH libifstat-config 1 "13 Jun 2004" "libifstat"
+.SH NAME
+libifstat-config \- get information about the installed version of libifstat
+.SH SYNOPSIS
+.B libifstat-config 
+.B [--cflags]
+.B [--exec-prefix]
+.B [--libs]
+.B [--prefix]
+.B [--version]
+.SH DESCRIPTION
+.B libifstat-config
+prints the compiler and linker flags required to compile and link programs
+that use the
+.BR libifstat
+Application Programmer Interface.
+.SH EXAMPLES
+To print the version of the installed distribution of
+.BR libifstat ,
+use:
+
+.nf
+  libifstat-config --version
+.fi
+  
+To compile a program that calls the 
+.BR libifstat
+Application Programmer Interface, use:
+
+.nf
+  cc `libifstat-config --cflags --libs` program.c
+.fi
+
+.SH OPTIONS
+.TP
+.B --cflags
+Print the compiler flags that were used to compile 
+.BR liblibifstat .
+.TP
+.B --exec-prefix
+Print the directory under which target specific binaries and executables
+are installed.
+.TP
+.B --libs
+Print the linker flags that are needed to link a program with
+.BR liblibifstat .
+.TP
+.B --version
+Print the version of the
+.B libifstat
+distribution to standard output.
+.SH COPYRIGHT
+The license can be found in the file /usr/share/common-licenses/GPL.
+.SH AUTHORS
+This package was debianized by the upstream Author Ga\[:e]l Roualland
+<gael.roualland@dial.oleane.com>. This manual page was adapted from
+the animal-config manual page of the animal package which in turn was
+adapted from Magick-config manual page of the ImageMagick package.

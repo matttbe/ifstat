@@ -1,3 +1,4 @@
 usr/bin/libifstat*
 usr/include/ifstat.h
 usr/lib/libifstat*
+usr/share/man/man1/libifstat-config.1

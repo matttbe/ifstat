@@ -35,7 +35,7 @@
 struct ifstat_data {
   char *name;
   int namelen;
-  unsigned long obout, obin, bout, bin;
+  unsigned long long obout, obin, bout, bin;
   int flags, index;
   struct ifstat_data *next;
 };
@@ -72,8 +72,8 @@ void ifstat_add_interface(struct ifstat_list *ifs, char *ifname, int flags);
 void ifstat_free_interface(struct ifstat_data *data);
 
 void ifstat_set_interface_stats(struct ifstat_data *data,
-				unsigned long bytesin,
-				unsigned long bytesout);
+				unsigned long long bytesin,
+				unsigned long long bytesout);
 
 void ifstat_set_interface_index(struct ifstat_data *data,
 				int index);

@@ -140,6 +140,7 @@ char *strchr (), *strrchr ();
 
 static void examine_interface(struct ifstat_list *ifs, char *name,
 			      int ifflags, int iftype) {
+  (void)iftype;
 #ifdef IFF_LOOPBACK
   if ((ifflags & IFF_LOOPBACK) && !(ifs->flags & IFSTAT_LOOPBACK))
     return;
@@ -242,6 +243,7 @@ static int ioctl_map_scan(int sd, struct ifreq *ifr, void *data) {
 static int ioctl_scan_interfaces(struct ifstat_driver *driver,
 				 struct ifstat_list *ifs) {
   int sd;
+  (void)driver;
 
   if ((sd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
     ifstat_perror("socket");
@@ -256,7 +258,7 @@ static int ioctl_scan_interfaces(struct ifstat_driver *driver,
 #endif
 
 #ifdef USE_KSTAT
-static int get_kstat_long(kstat_t *ksp, char *name, unsigned long *value) {
+static int get_kstat_long(kstat_t *ksp, char *name, unsigned long long *value) {
   kstat_named_t *data;
 
   if ((data = kstat_data_lookup(ksp, name)) == NULL)
@@ -277,7 +279,7 @@ static int get_kstat_long(kstat_t *ksp, char *name, unsigned long *value) {
     *value = data->value.ui64;
     break;
 #else
-  case KSTAT_DATA_LONGLONG:
+  case KSTAT_DATA_LONG LONGLONG:
     *value = data->value.ll;
     break;
   case KSTAT_DATA_ULONGLONG:
@@ -311,7 +313,7 @@ static int kstat_open_driver(struct ifstat_driver *driver,
 
 static int kstat_get_stats(struct ifstat_driver *driver,
 			   struct ifstat_list *ifs) {
-  unsigned long bytesin, bytesout;
+  unsigned long long bytesin, bytesout;
   struct ifstat_data *cur;
   kstat_ctl_t *kc = driver->data;
   kstat_t *ksp;
@@ -802,7 +804,7 @@ static int proc_get_stats(struct ifstat_driver *driver,
   char buf[1024];
   FILE *f;
   char *iface, *stats;
-  unsigned long bytesin, bytesout;
+  unsigned long long bytesin, bytesout;
   struct ifstat_data *cur;
   struct proc_driver_data *data = driver->data;
   char *file;
@@ -839,7 +841,7 @@ static int proc_get_stats(struct ifstat_driver *driver,
       iface++;
     if (*iface == '\0')
       continue;
-    if (sscanf(stats, "%lu %*u %*u %*u %*u %*u %*u %*u %lu %*u", &bytesin, &bytesout) != 2)
+    if (sscanf(stats, "%llu %*u %*u %*u %*u %*u %*u %*u %llu %*u", &bytesin, &bytesout) != 2)
       continue;
     
     if ((cur = ifstat_get_interface(ifs, iface)) != NULL)
@@ -1326,9 +1328,9 @@ static int win32_get_stats(struct ifstat_driver *driver,
   for (i = 0; i < iftable->dwNumEntries; i++) {
     if ((cur = ifstat_get_interface(ifs, iftable->table[i].bDescr)) != NULL)
       ifstat_set_interface_stats(cur,
-				 (unsigned long)
+				 (unsigned long long)
 				 iftable->table[i].dwInOctets,
-				 (unsigned long)
+				 (unsigned long long)
 				 iftable->table[i].dwOutOctets);
   }
   return 1;
@@ -1346,40 +1348,40 @@ void win32_close_driver(struct ifstat_driver *driver) {
 static struct ifstat_driver drivers[] = {
 #ifdef USE_KSTAT  
   { "kstat", &kstat_open_driver, &ioctl_scan_interfaces, &kstat_get_stats,
-    &kstat_close_driver },
+    &kstat_close_driver, NULL },
 #endif
 #ifdef USE_IFMIB  
-  { "ifmib", NULL, &ifmib_scan_interfaces, &ifmib_get_stats, NULL },
+  { "ifmib", NULL, &ifmib_scan_interfaces, &ifmib_get_stats, NULL, NULL },
 #endif
 #ifdef USE_IFDATA
   { "ifdata", &ifdata_open_driver, &ifdata_scan_interfaces,
-    &ifdata_get_stats, &ifdata_close_driver },
+    &ifdata_get_stats, &ifdata_close_driver, NULL },
 #endif
 #ifdef USE_ROUTE
   { "route", &route_open_driver, &route_scan_interfaces,
-    &route_get_stats, &route_close_driver },
+    &route_get_stats, &route_close_driver, NULL },
 #endif  
 #ifdef USE_KVM  
   { "kvm",  &kvm_open_driver, &kvm_scan_interfaces, &kvm_get_stats,
-    &kvm_close_driver },
+    &kvm_close_driver, NULL },
 #endif
 #ifdef USE_PROC  
   { "proc", &proc_open_driver, &ioctl_scan_interfaces, &proc_get_stats,
-    &proc_close_driver },
+    &proc_close_driver, NULL },
 #endif
 #ifdef USE_DLPI
   { "dlpi", &dlpi_open_driver, &dlpi_scan_interfaces, &dlpi_get_stats,
-    &dlpi_close_driver },
+    &dlpi_close_driver, NULL },
 #endif
 #ifdef USE_WIN32
   { "win32", &win32_open_driver, &win32_scan_interfaces,
-    &win32_get_stats, &win32_close_driver },
+    &win32_get_stats, &win32_close_driver, NULL },
 #endif  
 #ifdef USE_SNMP  
   { "snmp", &snmp_open_driver, &snmp_scan_interfaces, &snmp_get_stats,
-    &snmp_close_driver },
+    &snmp_close_driver, NULL },
 #endif  
-  { NULL } };
+  { NULL, NULL, NULL, NULL, NULL, NULL } };
   
 int ifstat_get_driver(char *name, struct ifstat_driver *driver) {
   int num = 0;

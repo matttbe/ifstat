@@ -215,7 +215,8 @@ static RETSIGTYPE update_termsize(int sig) {
 int _sigcont = 0;
 #ifdef SIGCONT
 static RETSIGTYPE sigcont(int sig) {
-  _sigcont = 1;  
+  (void)sig;
+  _sigcont = 1;
   RESIGNAL(SIGCONT, &sigcont);
 }
 #endif
@@ -234,7 +235,7 @@ static RETSIGTYPE sigcont(int sig) {
 
 #define NUM "12345.12"
 #define NA  "     n/a"
-#define WIDTH (sizeof(NUM) - 1) * 2 + (sizeof(SPACE) - 1)
+#define WIDTH ((ssize_t)sizeof(NUM) - 1) * 2 + ((ssize_t)sizeof(SPACE) - 1)
 
 #define LEN(options, namelen) (((options) & OPT_FIXEDWIDTH || (namelen) < WIDTH) ? WIDTH : (namelen))
 #define FMT(n) (((n) < 1e+5) ? "%8.2f" : (((n) < 1e+6) ? "%.1f" : "%.2e"))

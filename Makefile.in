@@ -66,7 +66,7 @@ install: install-$(TARGET) install-@LIBTARGET@
 
 install-$(TARGET): $(TARGET)
 	$(INSTALL) -d -m 755 $(bindir)
-	$(INSTALL) -s -m 755 $(TARGET) $(bindir)/$(TARGET)
+	$(INSTALL) -m 755 $(TARGET) $(bindir)/$(TARGET)
 	$(INSTALL) -d -m 755 $(mandir)/man1
 	$(INSTALL) -m 644 ifstat.1 $(mandir)/man1/ifstat.1
 
@@ -77,6 +77,8 @@ install-$(LIBTARGET): $(LIBTARGET) libifstat-config
 	$(INSTALL) -m 644 ifstat.h $(includedir)/ifstat.h
 	$(INSTALL) -d -m 755 $(libdir)
 	$(INSTALL) -m 644 $(LIBTARGET) $(libdir)/$(LIBTARGET)
+	$(INSTALL) -d -m 755 $(mandir)/man1
+	$(INSTALL) -m 644 libifstat-config.1 $(mandir)/man1/libifstat-config.1
 
 install-: # dependency when not building library
 

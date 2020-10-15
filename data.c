@@ -103,8 +103,8 @@ void ifstat_free_interface(struct ifstat_data *data) {
 }
 
 void ifstat_set_interface_stats(struct ifstat_data *data,
-				unsigned long bytesin,
-				unsigned long bytesout) {
+				unsigned long long bytesin,
+				unsigned long long bytesout) {
   if (data->bout > bytesout || data->bin > bytesin) {
     if (!ifstat_quiet)
       ifstat_error("warning: rollover for interface %s, reinitialising.", data->name);
