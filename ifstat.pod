@@ -4,7 +4,7 @@ ifstat - Report InterFace STATistics
 
 =head1 SYNOPSIS
 
-B<ifstat> [B<-i> if0,if1,...] [B<-s> [comm@][#]host] [B<-h>] [B<-n>] [B<-v>] [delay [count]]
+B<ifstat> [B<-a>] [B<-l>] [B<-n>] [B<-v>] [B<-h>] [B<-t>] [B<-i> if0,if1,...] [B<-d> drv[:opt]] [B<-s> [comm@][#]host] [B<-t>] [delay[/delay] [count]]
 
 =head1 DESCRIPTION
 
@@ -16,13 +16,21 @@ B<ifstat> accepts the following options:
 
 =over 4
 
+=item B<-l>
+
+Enables monitoring of loopback interfaces. By default, ifstat monitors all non-loopback interfaces that are up. 
+
+=item B<-a>
+
+Enables monitoring of all interfaces found.
+
 =item B<-i>
 
-Specifies the list of interfaces to monitor, separated by commas (if an interface name has a comma, it can be escaped with '\'). By default B<ifstat> monitors all interfaces that are up.
+Specifies the list of interfaces to monitor, separated by commas (if an interface name has a comma, it can be escaped with '\').
 
 =item B<-s>
 
-Specifies a host to poll through SNMP to get stats. Default community is public, but can be changed by prepending "comm@" to the hostname. If host starts by a #, interface names are generated from their index as `ifNN' (this is a workaround for some equipments that give all interfaces the same description).
+Equivalent to B<-d snmp:[comm@][#]host]> to poll a remote host through SNMP. See below for details.
 
 =item B<-h>
 
@@ -32,14 +40,52 @@ Displays a short help message.
 
 Turns off displaying the header periodically.
 
+=item B<-t>
+
+Adds a timestamp at the beginning of each line.
+
 =item B<-v>
 
-Displays version information.
+Displays version and the compiled-in drivers.
+
+=item B<-d>
+
+Specifies a driver to use to gather stats and an eventual option for this driver separated of the driver name by a colon. If this is not specified, ifstat uses the first driver compiled in, with no options.
+
+The following drivers are available (depending on the operating system and compile-time options, not all of them might be present):
+
+=over 4
+
+=item B<proc>
+
+This driver gets statistics from Linux's /proc/net/dev file. An alternate file name to get stats from can be passed as the option.
+
+=item B<ifmib>
+
+This driver gets statistics from FreeBSD's ifmib sysctl. It doesn't accept any options.
+
+=item B<kstat>
+
+This driver gets statistics from Solaris kstat interface. It doesn't accept any options.
+
+=item B<kvm>
+
+This driver gets statistics by reading the kernel live structures. It accepts an option specifying which files/devices to use in the following format : [execfile][,[corefile][,swapfile]] (see kvm_open(3) for details on those fields). If a null string is passed for a parameter, the system default will be used for it.
+
+Note that for this driver to work, ifstat needs to have read access to the system memory device. This is usually done by running it as root, or by installing setgid mem or kmem. ifstat will NOT install setgid by default; It is up to you to decide if you trust it.
+
+=item B<snmp>
+
+This driver gets statistics through SNMP. The option, in the form [comm@][#]host], specifies the host and eventual community to poll. Default community is public, but can be changed by prepending "comm@" to the hostname. If host starts by a #, interface names are generated from their index as `ifNN' (this is a workaround for some equipments that give all interfaces the same description). Default host is localhost, and this will be used by default if snmp is the only available driver.
+
+=back
 
 =item B<delay>
 
 B<delay> is the delay between updates in seconds, which defaults to 1.
 A decimal number can be specified for intervals shorter than a second. (minimum 0.1)
+
+A second delay can also be specified (separated from the first one by a '/'). In that case the first delay will be used for the first poll after start and the second one will be used for all following polls (This can be used to have a "fast" start when running for a long while with a big delay).
 
 =item B<count>
 

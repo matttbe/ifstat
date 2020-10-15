@@ -4,7 +4,7 @@ Gaël Roualland <gael.roualland@iname.com>
 
 To do:
 - add support for other systems; contributions appreciated :)
-- cleaner driver interface, remove global/static vars
 - rate adaptative unit display
 - maybe a generic lib that could be used by other similar apps
   (say all dockapps for instance) with a snmp-like interface ?
+- indexed polling for snmp/ifmib

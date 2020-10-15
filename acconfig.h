@@ -26,8 +26,4 @@
 #undef USE_KVM
 
 /* Define if you have SNMP support */
-#undef HAVE_SNMP
-
-/* Define if you want to use SNMP local for stats */
 #undef USE_SNMP
-

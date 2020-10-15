@@ -16,7 +16,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: ifstat.c,v 1.11 2001/12/24 01:15:49 gael Exp $
+ * $Id: ifstat.c,v 1.19 2002/01/16 00:11:48 gael Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -64,8 +64,6 @@ char *strchr (), *strrchr ();
 #include <stdlib.h>
 #include "ifstat.h"
 
-#define F_HASSTATS 1
-
 void add_interface(struct ifstat_data **first, char *ifname) {
   struct ifstat_data *cur, *last;
 
@@ -75,7 +73,7 @@ void add_interface(struct ifstat_data **first, char *ifname) {
   
   last = NULL;
   for (cur = *first; cur != NULL; cur = cur->next) {
-    if (!strcmp(cur->name, ifname))
+    if (cur->name[0] == ifname[0] && !strcmp(cur->name + 1, ifname + 1))
       return;
     last = cur;
   }
@@ -105,14 +103,14 @@ void set_interface_stats(struct ifstat_data *data,
   }
   data->bout = bytesout;
   data->bin = bytesin;
-  data->flags |= F_HASSTATS;
+  data->flags |= IFSTAT_HASSTATS;
 }
 
 struct ifstat_data *get_interface(struct ifstat_data *list, char *ifname) {
   struct ifstat_data *ptr;
 
   for (ptr = list; ptr != NULL; ptr = ptr->next)
-    if (!strcmp(ptr->name, ifname))
+    if (ptr->name[0] == ifname[0] && !strcmp(ptr->name + 1, ifname + 1))
       return ptr;
   return NULL;
 }
@@ -156,10 +154,11 @@ static struct ifstat_data *parse_interfaces(char *list) {
   return first;
 }
 
-static void usage(char *arg) {
-  fprintf(stderr, "usage: %s [-i if0,if1,...] [-s [comm@]host] [-h] [-n] [-v] [delay [count]]\n",
-	  arg);
-  exit(EXIT_FAILURE);
+static void usage(int result) {
+  fprintf(stderr,
+	  "usage: %s [-a] [-l] [-n] [-v] [-h] [-t] [-i if0,if1,...] [-d drv[:opt]]\n"
+	  "       -s [comm@]host] [-t] [delay[/delay] [count]]\n", progname);
+  exit(result);
 }
 
 #define SPACE "  "
@@ -169,11 +168,14 @@ static void usage(char *arg) {
   KB/s in  KB/s out    KB/s in  KB/s out
  14562.23  12345.25       0.00      0.00
 */
-static void print_header(struct ifstat_data *list) {
+static void print_header(struct ifstat_data *list, int tstamp) {
   struct ifstat_data *ptr;
   char ifname[19];
   int len, ofs, mlen = (sizeof(ifname) - 1);
-  
+
+  if (tstamp)
+    fputs("  Time  " SPACE, stdout);
+
   for (ptr = list; ptr != NULL; ptr = ptr->next) {
     memset(ifname, (int) ' ', mlen);
     ifname[mlen] = '\0';
@@ -191,6 +193,10 @@ static void print_header(struct ifstat_data *list) {
       fputs(SPACE, stdout);
   }
   putc('\n', stdout);
+
+  if (tstamp)
+    fputs("HH:MM:SS" SPACE, stdout);
+
   for (ptr = list; ptr != NULL; ptr = ptr->next) {
     fputs(" KB/s in  KB/s out", stdout);
     if (ptr->next)
@@ -201,36 +207,75 @@ static void print_header(struct ifstat_data *list) {
 
 static void print_stats(struct ifstat_data *list,
 			struct timeval *start,
-			struct timeval *end) {
+			struct timeval *end,
+			int tstamp) {
   struct ifstat_data *ptr;
   double delay, kbin, kbout;
+  struct tm *ltm;
+  if (tstamp) {
+    time_t t = end->tv_sec;
+    if ((ltm = localtime(&t)) != NULL)
+      fprintf(stdout, "%02d:%02d:%02d" SPACE,
+	      ltm->tm_hour, ltm->tm_min, ltm->tm_sec);
+    else
+      fputs("--:--:--" SPACE, stdout);
+  }
   
   delay = end->tv_sec - start->tv_sec + ((double) (end->tv_usec - start->tv_usec))
     / (double) 1000000;
 
   for (ptr = list; ptr != NULL; ptr = ptr->next) {
-    if (ptr->flags & F_HASSTATS) {
+    if (ptr->flags & IFSTAT_HASSTATS) {
       kbin = (double) (ptr->bin - ptr->obin) / (double) (1024 * delay);
       kbout = (double) (ptr->bout - ptr->obout) / (double) (1024 * delay);
-      printf("% 8.2f  % 8.2f" SPACE, kbin, kbout);
-      ptr->flags &= ~F_HASSTATS;
+      printf("%8.2f  %8.2f" SPACE, kbin, kbout);
+      ptr->flags &= ~IFSTAT_HASSTATS;
     } else
       fputs("     n/a       n/a" SPACE, stdout);
   }
   putc('\n', stdout);
 }
 
+static void needarg(char opt, int arg, int argc) {
+  if (arg + 1 >= argc) {
+    fprintf(stderr, "%s: option '%c' requires an argument!\n", progname, opt);
+    usage(EXIT_FAILURE);
+  }
+}
+
+double getdelay(char *string) {
+  double delay;
+
+  if ((delay = atof(string)) < 0.1) {
+    fprintf(stderr, "%s: bad or too short delay '%s'!\n", progname, string);
+    exit(EXIT_FAILURE);
+  }
+  return delay;
+}
+
+char *progname;
+
 int main(int argc, char **argv) {
-  char *ifaces = NULL, *snmp = NULL;
+  char *ifaces = NULL;
   struct ifstat_data *ifs;
+  struct ifstat_driver driver;
   int arg, iter;
   char *opt;
+  char *dname = NULL;
+  char *dopts = NULL;
 
   int header = 25; /* simple default */
-  double delay = 1;
+  double delay = 1, first_delay = 1;
   int count = 0;
+  int tstamp = 0;
+  int flags = 0;
 
   struct timeval start, tv_delay, tv;
+
+  if ((progname = strrchr(argv[0], '/')) != NULL)
+    progname++;
+  else
+   progname = argv[0];
   
   /* parse options */
   for (arg = 1; arg < argc; arg++) {
@@ -239,32 +284,45 @@ int main(int argc, char **argv) {
     opt = argv[arg]+1;
     while (*opt) {
       switch(*opt) {
+      case 'a':
+	flags |= IFSTAT_LOOPBACK|IFSTAT_DOWN;
+	break;
+      case 'l':
+	flags |= IFSTAT_LOOPBACK;
+	break;
       case 'v':
-	fprintf(stderr, "ifstat version " VERSION "\n"
-		"Copyright (C) 2001, Gaël Roualland <gael.roualland@iname.com>\n");
+	printf("ifstat version " VERSION "\n"
+	       "Copyright (C) 2001, Gaël Roualland <gael.roualland@iname.com>\n");
+	fputs("Compiled-in drivers: ", stdout);
+	print_drivers(stdout);
+	fputs(".\n", stdout);
 	exit(EXIT_SUCCESS);
       case 'n':
 	header = 0;
 	break;
+      case 't':
+	tstamp = 1;
+	break;
+      case 'd':
+	needarg(*opt, arg, argc);
+	dname = argv[++arg];
+	if ((dopts = strchr(dname, ':')) != NULL)
+	  *dopts++ = '\0';
+	break;
       case 'i':
-	if (arg + 1 >= argc) {
-	  fprintf(stderr, "%s: option '-i' requires an argument!\n", argv[0]);
-	  exit(EXIT_FAILURE);
-	}
+	needarg(*opt, arg, argc);
 	ifaces = argv[++arg];
 	break;
       case 's':
-	if (arg + 1 >= argc) {
-	  fprintf(stderr, "%s: option '-s' requires an argument!\n", argv[0]);
-	  exit(EXIT_FAILURE);
-	}
-	snmp = argv[++arg];
+	needarg(*opt, arg, argc);
+	dname = "snmp";
+	dopts = argv[++arg];
 	break;
       case 'h':
-	usage(argv[0]);
+	usage(EXIT_SUCCESS);
       default:
-	fprintf(stderr, "%s: invalid option '-%c'\n", argv[0], *opt);
-	usage(argv[0]);
+	fprintf(stderr, "%s: invalid option '-%c'.\n", progname, *opt);
+	usage(EXIT_FAILURE);
       }
       opt++;
     }
@@ -272,44 +330,49 @@ int main(int argc, char **argv) {
 
   /* has delay ? */
   if (arg < argc) {
-    delay = atof(argv[arg]);
-    if (delay < 0.1) {
-      fprintf(stderr, "%s: bad or too short delay '%s'!\n", argv[0], argv[arg]);
-      usage(argv[0]);
-    }
+    if ((opt = strchr(argv[arg], '/')) != NULL)
+      *opt++ = '\0';
+    first_delay = getdelay(argv[arg]);
+    delay = (opt != NULL) ? getdelay(opt) : first_delay;
     arg++;
   }
 
   /* has count ? */
   if (arg < argc) {
-    count = atoi(argv[arg]);
-    if (count <= 0) {
-      fprintf(stderr, "%s: bad count '%s'!\n", argv[0], argv[arg]);
-      usage(argv[0]);
+    if ((count = atoi(argv[arg])) <= 0) {
+      fprintf(stderr, "%s: bad count '%s'!\n", progname, argv[arg]);
+      return EXIT_FAILURE;
     }
     arg++;
   }
 
   /* extra arguments */
   if (arg < argc) {
-    fprintf(stderr, "%s: too many arguments!\n", argv[0]);
-    usage(argv[0]);
+    fprintf(stderr, "%s: too many arguments!\n", progname);
+    return EXIT_FAILURE;
   }
 
-  if (snmp != NULL)
-    snmp_init(snmp);
-  
+  /* look for driver */
+  if (!get_driver(dname, &driver)) {
+    fprintf(stderr, "%s: driver %s not available in this binary!\n", progname, dname);
+    return EXIT_FAILURE;
+  }
+
+  /* init driver */
+  if (driver.open_driver != NULL &&
+      !driver.open_driver(&driver, dopts))
+    return EXIT_FAILURE;
   
   if (ifaces != NULL)
     ifs = parse_interfaces(ifaces);
-  else if (snmp != NULL)
-    ifs = snmp_scan_interfaces();
   else
-    ifs = scan_interfaces();
-  
+    ifs = driver.scan_interfaces(&driver, flags);
+
   if (ifs == NULL) {
-    fprintf(stderr, "%s: no interfaces to monitor!\n", argv[0]);
-    exit(EXIT_FAILURE);
+    fprintf(stderr, "%s: no interfaces to monitor!\n", progname);
+    if (driver.close_driver != NULL)
+      driver.close_driver(&driver);
+    return EXIT_FAILURE;
   }
   
   /* update header print interval if needed/possible */
@@ -322,33 +385,36 @@ int main(int argc, char **argv) {
   }
 #endif
   
-  print_header(ifs);
-  if (snmp != NULL)
-    snmp_get_stats(ifs);
-  else
-    get_stats(ifs);
+  print_header(ifs, tstamp);
+  if (driver.get_stats != NULL && !driver.get_stats(&driver, ifs))
+    return EXIT_FAILURE;
   gettimeofday(&start, NULL);
 
-  tv_delay.tv_sec = (int) delay;
-  tv_delay.tv_usec = (int) ((delay - tv_delay.tv_sec) * 1000000);
+  tv.tv_sec = (int) first_delay;
+  tv.tv_usec = (int) ((first_delay - tv.tv_sec) * 1000000);
+
+  if (first_delay != delay) {
+    tv_delay.tv_sec = (int) delay;
+    tv_delay.tv_usec = (int) ((delay - tv_delay.tv_sec) * 1000000);
+  } else
+    tv_delay = tv;
   
   for (iter = 1; count == 0 || iter <= count; iter++) {
-    tv = tv_delay;
+    if (iter > 1)
+      tv = tv_delay;
     select(0, NULL, NULL, NULL, &tv);
     if (header != 0 && (iter % header == 0))
-      print_header(ifs);
-    if (snmp != NULL)
-      snmp_get_stats(ifs);
-    else
-      get_stats(ifs);
+      print_header(ifs, tstamp);
+    if (driver.get_stats != NULL && !driver.get_stats(&driver, ifs))
+      return EXIT_FAILURE;
     gettimeofday(&tv, NULL);
-    print_stats(ifs, &start, &tv);
+    print_stats(ifs, &start, &tv, tstamp);
     start = tv;
     fflush(stdout);
   }
 
-  if (snmp != NULL)
-    snmp_free();
-  
-  exit(EXIT_SUCCESS);
+  if (driver.close_driver != NULL)
+    driver.close_driver(&driver);
+
+  return EXIT_SUCCESS;
 }

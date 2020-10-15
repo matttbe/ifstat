@@ -1,6 +1,6 @@
 dnl configure.in for ifstat
 dnl Process this file with autoconf to create configure
-dnl $Id: configure.in,v 1.14 2001/12/24 01:15:49 gael Exp $
+dnl $Id: configure.in,v 1.24 2002/01/16 23:07:27 gael Exp $
 AC_INIT(ifstat.c)
 
 AC_ARG_ENABLE(debug,   [  --enable-debug          setup flags (gcc) for debugging (default=no)],
@@ -9,7 +9,7 @@ CPPFLAGS="$CPPFLAGS -DDEBUG"
 LDFLAGS="$LDFLAGS",)
 AC_ARG_ENABLE(optim,   [  --enable-optim          setup flags (gcc) for optimizations (default=no)],
 if test "x$enable_debug" != "xyes" ; then
-  CFLAGS="$CFLAGS -O3 -ffast-math -fomit-frame-pointer -funroll-loops -g0"
+  CFLAGS="$CFLAGS -O3 -g0"
   LDFLAGS="$LDFLAGS -s"
 else
   AC_MSG_WARN([enable-optim and enable-debug are incompatible -- disabling optimizations])
@@ -25,104 +25,103 @@ AC_HEADER_STDC
 AC_CHECK_HEADERS(sys/time.h)
 AC_HEADER_TIME
 AC_CHECK_HEADERS(unistd.h ctype.h sys/types.h net/if.h sys/socket.h sys/ioctl.h sys/termios.h) 
-# checking snmp
-AC_ARG_WITH(snmp, [  --with-snmp=prefix      include UCD-SNMP support (default=yes if found)], [], [with_snmp=yes])
-if test "x$with_snmp" != "xno" ; then
-  OCFLAGS="$CFLAGS"
-  OLDFLAGS="$LDFLAGS"
-  if test "x$with_snmp" != "xyes" ; then
-    CFLAGS="$CFLAGS -I$with_snmp/include"
-    LDFLAGS="$LDFLAGS -L$with_snmp/lib"
-  fi
-  with_snmp=no
-  for lib in "-lsnmp" "-lsnmp -lcrypto" ; do
-    if test "x$with_snmp" != "xyes" ; then
-      AC_MSG_CHECKING([for ucd-snmp in $lib])
-      OLIBS="$LIBS"
-      LIBS="$LIBS $lib"
-      AC_TRY_LINK([#include <unistd.h>
-                   #include <sys/types.h>
-                   #include <sys/socket.h>
-                   #include <netinet/in.h>
-	           #include <ucd-snmp/ucd-snmp-config.h>
-	           #include <ucd-snmp/ucd-snmp-includes.h>],
-                  [struct snmp_session s; snmp_open(&s);],
-                  [with_snmp=yes], [LIBS="$OLIBS"])
-      AC_MSG_RESULT([$with_snmp])
-    fi
-  done
-  if test "x$with_snmp" = "xyes" ; then
-    AC_DEFINE([HAVE_SNMP])
-  else
-    CFLAGS="$OCFLAGS"
-    LDFLAGS="$OLDFLAGS"
-  fi
-fi
+# Options for various drivers
+# auto means try if no other found, no disables, and anything else is try.
+AC_ARG_WITH(proc, [  --with-proc             include /proc/net/dev support (default=auto)],
+            [], [with_proc=auto])
+AC_ARG_WITH(kstat, [  --with-kstat            include kstat(3K) support (default=auto)],
+            [], [with_kstat=auto])
+AC_ARG_WITH(ifmib, [  --with-ifmib            include ifmib(4) support (default=auto)],
+            [], [with_ifmib=auto])
+AC_ARG_WITH(kvm,  [  --with-kvm              include kvm(3) support (default=auto)],
+            [], [with_kvm=auto])
+AC_ARG_WITH(snmp, [  --with-snmp=prefix      include UCD-SNMP support (default=yes)],
+            [], [with_snmp=yes])
+with_ioctl=no # only enabled if needed by other drivers
+local_driver=no # yes if one driver is local
 
 # checking for proc (Linux)
-AC_MSG_CHECKING([for /proc/net/dev interface])
-if grep -q Inter- /proc/net/dev 2>/dev/null; then
-  proc=yes
-  AC_DEFINE([USE_PROC])
-else
-  proc=no
+if test "x$with_proc" != "xno"; then
+  AC_MSG_CHECKING([for /proc/net/dev interface])
+  if grep -q Inter- /proc/net/dev 2>/dev/null; then
+    AC_DEFINE([USE_PROC])
+    with_proc=yes
+    with_ioctl=yes
+    local_driver=yes
+    # turn off other drivers on auto mode
+    test "x$with_kstat" = "xauto" && with_kstat=no
+    test "x$with_kvm" = "xauto" && with_kvm=no
+    test "x$with_ifmib" = "xauto" && with_ifmib=no
+  else
+    with_proc=no
+  fi
+  AC_MSG_RESULT([$with_proc])
 fi
-AC_MSG_RESULT([$proc])
 
-if test "x$proc" != "xyes" ; then
-  # checking for kstat (Solaris)
-  AC_CHECK_FUNC(kstat_open, kstat=yes, kstat=no)
-  if test "x$kstat" != "xyes" ; then
+# checking for kstat (Solaris)
+if test "x$with_kstat" != "xno"; then
+  AC_CHECK_FUNC(kstat_open, with_kstat=yes, with_kstat=no)
+  if test "x$withkstat" != "xyes" ; then
     case "x$LIBS" in
       *-lkstat*) ;;
-      *) AC_CHECK_LIB(kstat, kstat_open, [LIBS="$LIBS -lkstat"; kstat=yes]) ;;
+      *) AC_CHECK_LIB(kstat, kstat_open, [LIBS="$LIBS -lkstat"; with_kstat=yes]) ;;
     esac
   fi
-
-  if test "x$kstat" = "xyes" ; then
+  if test "x$with_kstat" = "xyes" ; then
     AC_CHECK_HEADERS(kstat.h)
     AC_DEFINE([USE_KSTAT])
-  else
-    # checking for if_mib (FreeBSD)
-    AC_CHECK_HEADER(net/if_mib.h, [AC_CHECK_FUNC(sysctl, ifmib=yes, ifmib=no)], ifmib=no)
-    if test "x$ifmib" = "xyes"; then
-      AC_CHECK_HEADERS(sys/sysctl.h net/if_mib.h)
-      AC_DEFINE([USE_IFMIB])
-    else
-      # check for kvm
-      AC_CHECK_FUNC(kvm_open, kvm=yes, kvm=no)
-      if test "x$kvm" != "xyes" ; then
-        case "x$LIBS" in
-          *-lkvm*) ;;
-          *) AC_CHECK_LIB(kvm, kvm_open, [LIBS="$LIBS -lkvm"; kvm=yes]) ;;
-        esac
-      fi
-      if test "x$kvm" = "xyes"; then
-        AC_CHECK_HEADERS(fcntl.h kvm.h net/if_var.h)
-        AC_MSG_CHECKING([for ifnet if_xname member])
-        AC_TRY_COMPILE([#include <sys/types.h>
-                        #include <sys/socket.h>
-                        #include <net/if.h>],[struct ifnet in; in.if_xname[0] = 'a';],
-                 ifxname=yes, ifxname=no)
-        test "x$ifxname" = "xyes" && AC_DEFINE(HAVE_IFNET_IF_XNAME)
-        AC_MSG_RESULT([$ifxname])
-        AC_DEFINE([USE_KVM])
-        AC_MSG_WARN([you will need to make ifstat SGID kmem to run as simple user])
-      else
-        if test "x$with_snmp" = "xyes" ; then
-          snmp=yes
-          AC_DEFINE([USE_SNMP])
-          AC_MSG_WARN([no native stats gathering mechanism known; using SNMP.])
-        else
-          AC_MSG_ERROR([no statistics gathering methods found, porting needed.])
-        fi
-      fi
-    fi
+    with_ioctl=yes
+    local_driver=yes
+    # turn off other drivers on auto mode
+    test "x$with_kvm" = "xauto" && with_kvm=no
+    test "x$with_ifmib" = "xauto" && with_ifmib=no
   fi
 fi
 
-# checking for siocgifconf (not if using if_mib, since that's builtin)
-if test "x$ifmib" != "xyes" -a "x$snmp" != "xyes"; then
+# checking for ifmib (FreeBSD)
+if test "x$with_ifmib" != "xno"; then
+  AC_CHECK_HEADER(net/if_mib.h,
+                  [AC_CHECK_FUNC(sysctl, with_ifmib=yes, with_ifmib=no)],
+                  with_ifmib=no)
+  if test "x$with_ifmib" = "xyes"; then
+    AC_CHECK_HEADERS(sys/sysctl.h net/if_mib.h)
+    AC_DEFINE([USE_IFMIB])
+    local_driver=yes
+    # turn off other drivers on auto mode
+    test "x$with_kvm" = "xauto" && with_kvm=no
+  fi
+fi
+
+# checking for kvm (*BSDs)
+if test "x$with_kvm" != "xno"; then
+  AC_CHECK_FUNC(kvm_open, with_kvm=yes, with_kvm=no)
+  if test "x$with_kvm" != "xyes" ; then
+    case "x$LIBS" in
+     *-lkvm*) ;;
+     *) AC_CHECK_LIB(kvm, kvm_open, [LIBS="$LIBS -lkvm"; with_kvm=yes]) ;;
+    esac
+  fi
+  if test "x$with_kvm" = "xyes"; then
+    AC_CHECK_HEADERS(fcntl.h kvm.h net/if_var.h)
+    AC_MSG_CHECKING([for ifnet if_xname member])
+    AC_TRY_COMPILE([#include <sys/types.h>
+                    #include <sys/socket.h>
+		    #include <net/if.h>
+		    #ifdef HAVE_NET_IF_VAR_H
+		    #include <net/if_var.h>
+		    #endif],[struct ifnet in; in.if_xname[0] = 'a';],
+                   ifxname=yes, ifxname=no)
+    test "x$ifxname" = "xyes" && AC_DEFINE(HAVE_IFNET_IF_XNAME)
+    AC_MSG_RESULT([$ifxname])
+    AC_DEFINE([USE_KVM])
+    AC_MSG_WARN([you will need to make ifstat SGID kmem to run as simple user])
+    local_driver=yes
+    with_ioctl=yes
+  fi
+fi
+
+# checking for ioctl (siocgifconf) to get interfaces
+if test "x$with_ioctl" != "xno"; then
   AC_DEFINE([USE_IOCTL])
   AC_CHECK_HEADERS(sys/sockio.h)
   AC_CHECK_FUNC(socket, checksocket=no, checksocket=yes)
@@ -152,8 +151,68 @@ if test "x$ifmib" != "xyes" -a "x$snmp" != "xyes"; then
   fi
 fi
 
+# checking for snmp (UCD-SNMP)
+if test "x$with_snmp" != "xno" ; then
+  OCFLAGS="$CFLAGS"
+  OLDFLAGS="$LDFLAGS"
+  if test "x$with_snmp" != "xyes" ; then
+    CFLAGS="$CFLAGS -I$with_snmp/include"
+    LDFLAGS="$LDFLAGS -L$with_snmp/lib"
+  fi
+  with_snmp=no
+  SNMPLIBALONE="-lsnmp"
+  # Setting to be able to force linking with -lcrypto....
+  # This is needed on OpenBSD (at least) where the snmplib port links without -lcrypto,
+  # but fails to run.
+  AC_ARG_WITH(libcrypto,
+              [  --with-libcrypto        force link with -lcrypto for UCD-SNMP (default=no)],
+	      [], [with_libcrypto=no])
+  if test "x$with_libcrypto" = "xyes" ; then
+    SNMPLIBALONE=""
+  fi
+  for lib in $SNMPLIBALONE "-lsnmp -lcrypto" ; do
+    if test "x$with_snmp" != "xyes" ; then
+      AC_MSG_CHECKING([for ucd-snmp in $lib])
+      OLIBS="$LIBS"
+      LIBS="$LIBS $lib"
+      AC_TRY_LINK([#include <unistd.h>
+                   #include <sys/types.h>
+                   #include <sys/socket.h>
+                   #include <netinet/in.h>
+                   #include <ucd-snmp/ucd-snmp-config.h>
+                   #include <ucd-snmp/ucd-snmp-includes.h>],
+	          [struct snmp_session s; snmp_sess_init(&s);],
+                  [with_snmp=yes], [LIBS="$OLIBS"])
+      AC_MSG_RESULT([$with_snmp])
+    fi
+  done
+  if test "x$with_snmp" = "xyes" ; then
+    AC_DEFINE([USE_SNMP])
+    # hint users about the possible needed option
+    case `uname -s` in
+     *OpenBSD*)
+       case "$LIBS" in
+        *-lcrypto*) ;;
+	*) AC_MSG_WARN([SNMP test linked fine, but you might need to use --with-libcrypto for SNMP to work on this OS.]);;
+       esac ;;
+    esac
+  else
+    CFLAGS="$OCFLAGS"
+    LDFLAGS="$OLDFLAGS"
+  fi
+fi
+
+# checking that we do have at least one driver
+if test "x$local_driver" != "xyes"; then
+  if test "x$with_snmp" = "xyes"; then
+    AC_MSG_WARN([no native stats gathering mechanism found; will use SNMP.])
+  else
+    AC_MSG_ERROR([no statistics gathering methods found, porting needed.])
+  fi
+fi
+
 dnl Version
-VERSION="0.4"
+VERSION="0.5"
 AC_DEFINE_UNQUOTED(VERSION, "$VERSION")
 
 dnl Output

@@ -4,6 +4,19 @@ Gaël Roualland <gael.roualland@iname.com>
 
 Releases History:
 
+* v0.5 - 17/01/2002
+  - Cleaner driver interface, no more static stuff.
+  - Multiple driver support with individual options.
+  - Timestamping support.
+  - Do not include loopback interfaces by default.
+  - "All" and "Loopback" options for interfaces selection.
+  - Display format fixup for rates >= 10000 KB/s
+  - Fast start support with different first delay.
+  - libcrypto workaround for SNMP (needed on OpenBSD/Sparc at least)
+  - Debian (deb) packaging support.
+  - Redhat (rpm) packaging support.
+    (contributed by Werner Bosse <wbosse@berlin.snafu.de>)
+
 * v0.4 - 24/12/2001 "The Christmas Release"
   - SNMP support through ucd-snmp if available.
   - Removed syntax restrictions on interfaces names.

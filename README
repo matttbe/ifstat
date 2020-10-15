@@ -32,8 +32,25 @@ accepts the following extra-options:
 
    --enable-debug     This turns debugging on in the library.
    --enable-optim     This turns on some gcc optimization flags.
+
+By default, all the statistics gathering drivers are checked for 
+availibility until a working one is found, but several can be
+included. If you wish to force inclusion of an alternate driver 
+(if available) or disable one, you can use one of the following options:
+
+   --with-proc        Force support of /proc if available.
+   --without-proc     Do not includen support for /proc.
+   --with-kstat       Force support of kstat if available.
+   --without-kstat    Do not includen support for kstat.
+   --with-ifmib       Force support of ifmib if available.
+   --without-ifmib    Do not include support for ifmib.
+   --with-kvm         Force support for kvm if available.
+   --without-kvm      Do not include support for kvm.
    --with-snmp=prefix Specify where the snmp library is installed
-   --without-snmp     This turns off support for SNMP.
+   --without-snmp     Do not include support for SNMP.
+   --with-libcrypto   Force use of libcrypto with UCD-SNMP. This is needed
+                      on at least OpenBSD, since the snmp library links
+                      but doesn't run without it.
 
 Then, run the make command:
 

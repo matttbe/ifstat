@@ -130,38 +130,75 @@
 .\" ========================================================================
 .\"
 .IX Title "IFSTAT 1"
-.TH IFSTAT 1 "2001-12-24" " " "System Utilities"
+.TH IFSTAT 1 "2002-01-16" " " "System Utilities"
 .UC
 .SH "NAME"
 ifstat \- Report InterFace STATistics
 .SH "SYNOPSIS"
 .IX Header "SYNOPSIS"
-\&\fBifstat\fR [\fB\-i\fR if0,if1,...] [\fB\-s\fR [comm@][#]host] [\fB\-h\fR] [\fB\-n\fR] [\fB\-v\fR] [delay [count]]
+\&\fBifstat\fR [\fB\-a\fR] [\fB\-l\fR] [\fB\-n\fR] [\fB\-v\fR] [\fB\-h\fR] [\fB\-t\fR] [\fB\-i\fR if0,if1,...] [\fB\-d\fR drv[:opt]] [\fB\-s\fR [comm@][#]host] [\fB\-t\fR] [delay[/delay] [count]]
 .SH "DESCRIPTION"
 .IX Header "DESCRIPTION"
 Ifstat is a little tool to report interface activity in KBps, just like iostat/vmstat do for other system statistics.
 .SH "OPTIONS"
 .IX Header "OPTIONS"
 \&\fBifstat\fR accepts the following options:
+.IP "\fB\-l\fR" 4
+.IX Item "-l"
+Enables monitoring of loopback interfaces. By default, ifstat monitors all non-loopback interfaces that are up. 
+.IP "\fB\-a\fR" 4
+.IX Item "-a"
+Enables monitoring of all interfaces found.
 .IP "\fB\-i\fR" 4
 .IX Item "-i"
-Specifies the list of interfaces to monitor, separated by commas (if an interface name has a comma, it can be escaped with '\e'). By default \fBifstat\fR monitors all interfaces that are up.
+Specifies the list of interfaces to monitor, separated by commas (if an interface name has a comma, it can be escaped with '\e').
 .IP "\fB\-s\fR" 4
 .IX Item "-s"
-Specifies a host to poll through \s-1SNMP\s0 to get stats. Default community is public, but can be changed by prepending \*(L"comm@\*(R" to the hostname. If host starts by a #, interface names are generated from their index as `ifNN' (this is a workaround for some equipments that give all interfaces the same description).
+Equivalent to \fB\-d snmp:[comm@][#]host]\fR to poll a remote host through \s-1SNMP\s0. See below for details.
 .IP "\fB\-h\fR" 4
 .IX Item "-h"
 Displays a short help message.
 .IP "\fB\-n\fR" 4
 .IX Item "-n"
 Turns off displaying the header periodically.
+.IP "\fB\-t\fR" 4
+.IX Item "-t"
+Adds a timestamp at the beginning of each line.
 .IP "\fB\-v\fR" 4
 .IX Item "-v"
-Displays version information.
+Displays version and the compiled-in drivers.
+.IP "\fB\-d\fR" 4
+.IX Item "-d"
+Specifies a driver to use to gather stats and an eventual option for this driver separated of the driver name by a colon. If this is not specified, ifstat uses the first driver compiled in, with no options.
+.Sp
+The following drivers are available (depending on the operating system and compile-time options, not all of them might be present):
+.RS 4
+.IP "\fBproc\fR" 4
+.IX Item "proc"
+This driver gets statistics from Linux's /proc/net/dev file. An alternate file name to get stats from can be passed as the option.
+.IP "\fBifmib\fR" 4
+.IX Item "ifmib"
+This driver gets statistics from FreeBSD's ifmib sysctl. It doesn't accept any options.
+.IP "\fBkstat\fR" 4
+.IX Item "kstat"
+This driver gets statistics from Solaris kstat interface. It doesn't accept any options.
+.IP "\fBkvm\fR" 4
+.IX Item "kvm"
+This driver gets statistics by reading the kernel live structures. It accepts an option specifying which files/devices to use in the following format : [execfile][,[corefile][,swapfile]] (see \fIkvm_open\fR\|(3) for details on those fields). If a null string is passed for a parameter, the system default will be used for it.
+.Sp
+Note that for this driver to work, ifstat needs to have read access to the system memory device. This is usually done by running it as root, or by installing setgid mem or kmem. ifstat will \s-1NOT\s0 install setgid by default; It is up to you to decide if you trust it.
+.IP "\fBsnmp\fR" 4
+.IX Item "snmp"
+This driver gets statistics through \s-1SNMP\s0. The option, in the form [comm@][#]host], specifies the host and eventual community to poll. Default community is public, but can be changed by prepending \*(L"comm@\*(R" to the hostname. If host starts by a #, interface names are generated from their index as `ifNN' (this is a workaround for some equipments that give all interfaces the same description). Default host is localhost, and this will be used by default if snmp is the only available driver.
+.RE
+.RS 4
+.RE
 .IP "\fBdelay\fR" 4
 .IX Item "delay"
 \&\fBdelay\fR is the delay between updates in seconds, which defaults to 1.
 A decimal number can be specified for intervals shorter than a second. (minimum 0.1)
+.Sp
+A second delay can also be specified (separated from the first one by a '/'). In that case the first delay will be used for the first poll after start and the second one will be used for all following polls (This can be used to have a \*(L"fast\*(R" start when running for a long while with a big delay).
 .IP "\fBcount\fR" 4
 .IX Item "count"
 \&\fBcount\fR is the number of updates before stopping. If not specified, it is unlimited.

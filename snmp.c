@@ -16,7 +16,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: snmp.c,v 1.6 2001/12/20 23:28:38 gael Exp $
+ * $Id: snmp.c,v 1.10 2002/01/14 22:34:57 gael Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -26,7 +26,7 @@
 #include <stdio.h>
 #include "ifstat.h"
 
-#ifdef HAVE_SNMP
+#ifdef USE_SNMP
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -80,6 +80,7 @@ struct ifsnmp {
 #define S_UP   1
 #define S_BIN  2
 #define S_BOUT 4
+#define S_LOOP 8
 
 /* fill a struct ifsnmp buffer of selected information (flags) for
    interface index to (index + nifs - 1). ifsnmp must be large
@@ -91,6 +92,7 @@ static int snmp_get_ifinfos(struct snmp_session *ss, int index, int nifs,
   struct snmp_pdu *pdu, *response = NULL;
   oid ifinfo[] = { 1, 3, 6, 1, 2, 1, 2, 2, 1, 0, 0 }; /* interfaces.ifTable.ifEntry.x.n */
 #define ifDescr 2
+#define ifType 3  
 #define ifOperStatus 8  
 #define ifInOctets 10
 #define ifOutOctets 16
@@ -98,11 +100,11 @@ static int snmp_get_ifinfos(struct snmp_session *ss, int index, int nifs,
   int i, status;
  
   if (nifs <= 0)
-    return -1;
+    return 0;
   
   if ((pdu = snmp_pdu_create(SNMP_MSG_GET)) == NULL) {
     snmp_perror("snmp_pdu_create");
-    return -1;
+    return 0;
   }
 
   for (i = 0; i < nifs; i++) {
@@ -128,6 +130,10 @@ static int snmp_get_ifinfos(struct snmp_session *ss, int index, int nifs,
       ifinfo[9] = ifInOctets;
       snmp_add_null_var(pdu, ifinfo, sizeof(ifinfo) / sizeof(oid));
     }
+    if (flags & S_LOOP) {
+      ifinfo[9] = ifType;
+      snmp_add_null_var(pdu, ifinfo, sizeof(ifinfo) / sizeof(oid));
+    }
   }
     
   if ((status = snmp_synch_response(ss, pdu, &response)) != STAT_SUCCESS ||
@@ -141,7 +147,7 @@ static int snmp_get_ifinfos(struct snmp_session *ss, int index, int nifs,
       snmp_sess_perror("snmpget(interfaces.ifTable.ifEntry...)", ss);
     if (response != NULL)
       snmp_free_pdu(response);
-    return -1;
+    return 0;
   }
 
   for(vars = response->variables; vars; vars = vars->next_variable) {
@@ -168,6 +174,12 @@ static int snmp_get_ifinfos(struct snmp_session *ss, int index, int nifs,
 	  ifsnmp[i].flags |= S_UP;
       }
       break;
+    case ifType:
+      if (vars->type == ASN_INTEGER) {
+	if (*(vars->val.integer) == 24) /* softwareLoopback */
+	  ifsnmp[i].flags |= S_LOOP;
+      }
+      break;
     case ifInOctets:
       if (vars->type == ASN_INTEGER || vars->type == ASN_COUNTER) {
 	ifsnmp[i].flags |= S_BIN;
@@ -183,62 +195,78 @@ static int snmp_get_ifinfos(struct snmp_session *ss, int index, int nifs,
     }
   }
   snmp_free_pdu(response);
-  return 0;
+  return 1;
 }
 
-/* globals */
-static struct snmp_session *sess = NULL;
-static int num_ifnames = 0;
+/* driver API */
+
+struct snmp_driver_data {
+  struct snmp_session *session;
+  int num_ifnames;
+};
+
+/* maximum number of interfaces to poll at once, min 1 */
+#define MAXIFS 4
 
 /* initiailise the snmp driver, strings syntax is [comm@][#]host*/
-void snmp_init(char *string) {
+int snmp_open_driver(struct ifstat_driver *driver, char *options) {
   char *host;
   char *community;
   struct snmp_session session;
+  struct snmp_driver_data *data;
+  
+  if ((data = malloc(sizeof(struct snmp_driver_data))) == NULL) {
+    perror("malloc");
+    return 0;
+  }
 
-  if ((host = strchr(string, '@')) != NULL) {
+  if (options == NULL)
+    options = "localhost";
+  
+  if ((host = strchr(options, '@')) != NULL) {
     *host++ = '\0';
-    community = string;
+    community = options;
   } else {
-    host = string;
+    host = options;
     community = "public";
   }
 
   if (*host == '#') {
     host++;
-    num_ifnames = 1; /* numeric interface names */
-  }
-  
-  init_snmp("ifstat");
+    data->num_ifnames = 1; /* numeric interface names */
+  } else
+    data->num_ifnames = 0;
+
+  init_snmp(progname);
   snmp_sess_init(&session);
   session.peername = host;
   session.version = SNMP_VERSION_1;
   session.community = community;
-  session.community_len = strlen(session.community);
+  session.community_len = strlen(community);
 
-  if ((sess = snmp_open(&session)) == NULL) {
+  if ((data->session = snmp_open(&session)) == NULL) {
     snmp_perror("snmp_open");
-    exit(EXIT_FAILURE);
+    free(data);
+    return 0;
   }
+  
+  driver->data = (void *) data;
+  return 1;
 }
 
 /* cleanups session */
-void snmp_free() {
-  if (sess != NULL)
-    snmp_close(sess);
-  sess = NULL;
+void snmp_close_driver(struct ifstat_driver *driver) {
+  snmp_close(((struct snmp_driver_data *) driver->data)->session);
 }
 
-/* maximum number of interfaces to poll at once, min 1 */
-#define MAXIFS 4
-
-/* driver API */
-struct ifstat_data *snmp_scan_interfaces() {
+struct ifstat_data *snmp_scan_interfaces(struct ifstat_driver *driver,
+					 int flags) {
+  struct snmp_driver_data *data = driver->data;
   struct ifstat_data *list = NULL;
   struct ifsnmp ifsnmp[MAXIFS];
   int ifs, index, i;
   
-  if ((ifs = snmp_get_ifcount(sess)) <= 0)
+  if ((ifs = snmp_get_ifcount(data->session)) <= 0)
     return NULL;
 
   for (index = 0; index <= (ifs / MAXIFS); index++) {
@@ -246,12 +274,14 @@ struct ifstat_data *snmp_scan_interfaces() {
     if (nifs > MAXIFS)
       nifs = MAXIFS;
 
-    if (snmp_get_ifinfos(sess, index * MAXIFS + 1, nifs, S_UP, ifsnmp) < 0)
+    if (!snmp_get_ifinfos(data->session, index * MAXIFS + 1, nifs, S_UP|S_LOOP, ifsnmp))
       continue;
     for (i=0; i < MAXIFS; i++) {
-      if (ifsnmp[i].flags & S_UP) {
+      if ((ifsnmp[i].flags & S_LOOP) && !(flags & IFSTAT_LOOPBACK))
+	continue;
+      if ((ifsnmp[i].flags & S_UP) || (flags & IFSTAT_DOWN)) {
 	/* overwrite if name if needed */
-	if (num_ifnames)
+	if (data->num_ifnames)
 	  sprintf(ifsnmp[i].name, "if%d", index * MAXIFS + i);
 	add_interface(&list, ifsnmp[i].name);
       }
@@ -261,42 +291,34 @@ struct ifstat_data *snmp_scan_interfaces() {
   return list;
 }
 
-void snmp_get_stats(struct ifstat_data *list) {
+int snmp_get_stats(struct ifstat_driver *driver, struct ifstat_data *list) {
+  struct snmp_driver_data *data = driver->data;
   int ifs, index, i;
   struct ifstat_data *cur;
   struct ifsnmp ifsnmp[MAXIFS];
 
-  if ((ifs = snmp_get_ifcount(sess)) <= 0)
-    return;
+  if ((ifs = snmp_get_ifcount(data->session)) <= 0) {
+    fprintf(stderr, "%s: no more interfaces.\n", progname);
+    return 0;
+  }
 
   for (index = 0; index <= (ifs / MAXIFS); index++) {
     int nifs = ifs - index * MAXIFS;
     if (nifs > MAXIFS)
       nifs = MAXIFS;
 
-    if (snmp_get_ifinfos(sess, index * MAXIFS + 1, nifs, S_BIN|S_BOUT, ifsnmp) < 0)
+    if (!snmp_get_ifinfos(data->session, index * MAXIFS + 1, nifs, S_BIN|S_BOUT, ifsnmp))
       continue;
     for (i=0; i < MAXIFS; i++) {
       if (ifsnmp[i].flags & S_BIN && ifsnmp[i].flags & S_BOUT) {
 	/* overwrite if name if needed */
-	if (num_ifnames)
+	if (data->num_ifnames)
 	  sprintf(ifsnmp[i].name, "if%d", index * MAXIFS + i);
 	if ((cur = get_interface(list, ifsnmp[i].name)) != NULL)
 	  set_interface_stats(cur, ifsnmp[i].bin, ifsnmp[i].bout);
       }
     }
   }
+  return 1;
 }
-
-#else
-/* bogus API */
-
-void snmp_init(char *string) {
-  fprintf(stderr, "no SNMP support in this binary!\n");
-  exit(EXIT_FAILURE);
-}
-
-struct ifstat_data *snmp_scan_interfaces() { return NULL; }
-void snmp_get_stats(struct ifstat_data *ifs) {}
-void snmp_free() {}
 #endif

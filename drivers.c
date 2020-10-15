@@ -16,7 +16,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: drivers.c,v 1.9 2001/12/18 05:07:29 gael Exp $
+ * $Id: drivers.c,v 1.16 2002/01/14 23:36:09 gael Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -79,7 +79,7 @@ char *strchr (), *strrchr ();
 #include "ifstat.h"
 
 #ifdef USE_KSTAT
-int get_kstat_long(kstat_t *ksp, char *name, unsigned long *value) {
+static int get_kstat_long(kstat_t *ksp, char *name, unsigned long *value) {
   kstat_named_t *data;
 
   if ((data = kstat_data_lookup(ksp, name)) == NULL)
@@ -103,17 +103,26 @@ int get_kstat_long(kstat_t *ksp, char *name, unsigned long *value) {
   return 1;
 }
 
-void get_stats(struct ifstat_data *list) {
+static int kstat_open_driver(struct ifstat_driver *driver,
+			     char *options) {
+  kstat_ctl_t *kc;
+  
+  if ((kc = kstat_open()) == NULL) {
+    perror("kstat_open");
+    return 0;
+  }
+
+  driver->data = (void *) kc;
+  return 1;
+}
+
+static int kstat_get_stats(struct ifstat_driver *driver,
+			    struct ifstat_data *list) {
   unsigned long bytesin, bytesout;
   struct ifstat_data *cur;
-  static kstat_ctl_t *kc = NULL;
+  kstat_ctl_t *kc = driver->data;
   kstat_t *ksp;
 
-  if (kc == NULL && (kc = kstat_open()) == NULL) {
-    perror("kstat_open");
-    exit(EXIT_FAILURE);
-  }
-  
   for (cur = list; cur != NULL; cur = cur->next) {
     if ((ksp = kstat_lookup(kc, NULL, -1, cur->name)) == NULL ||
 	ksp->ks_type != KSTAT_TYPE_NAMED)
@@ -123,40 +132,80 @@ void get_stats(struct ifstat_data *list) {
 	get_kstat_long(ksp, "rbytes", &bytesin))
       set_interface_stats(cur, bytesin, bytesout);
   }
+  return 1;
+}
+
+static void kstat_close_driver(struct ifstat_driver *driver) {
+  kstat_close(((kstat_ctl_t *) driver->data));
 }
 #endif
 
 #ifdef USE_KVM
-void get_stats(struct ifstat_data *list) {
-  static kvm_t *kvmfd = NULL;
-  static unsigned long ifnetaddr = 0, ifaddr;
-  struct ifnet ifnet;
-  char ifname[16], interface[32];
-  struct nlist kvm_syms[] = { { "_ifnet" }, { NULL } };
-  struct ifstat_data *cur;
-  
-  if (kvmfd == NULL &&
-      (kvmfd = kvm_open(NULL, NULL, NULL, O_RDONLY, "ifstat")) == NULL)
-    exit(EXIT_FAILURE);
+struct kvm_driver_data {
+  kvm_t *kvmfd;
+  unsigned long ifnetaddr;
+};
 
-  if (ifnetaddr == 0) {
-    if (kvm_nlist(kvmfd, kvm_syms) < 0 ||
-	kvm_read(kvmfd, (unsigned long) kvm_syms[0].n_value,
-		 &ifnetaddr, sizeof(ifnetaddr)) < 0 ||
-	ifnetaddr == 0)
-      exit(EXIT_FAILURE);
+static int kvm_open_driver(struct ifstat_driver *driver,
+			   char *options) {
+  struct kvm_driver_data *data;
+  struct nlist kvm_syms[] = { { "_ifnet" }, { NULL } };
+  unsigned long ifnetaddr;
+  char *files[3] = { NULL /* execfile */,
+		     NULL /* corefile */,
+		     NULL /* swapfile */ };
+  int i;
+  
+  if ((data = malloc(sizeof(struct kvm_driver_data))) == NULL) {
+    perror("malloc");
+    return 0;
   }
 
-  for (ifaddr = ifnetaddr; ifaddr != 0;
+  /* cut options : [execfile][,[corefile][,[swapfile]]] */
+  i = 0;
+  while (options != NULL && i < 3) {
+    char *v = strchr(options, ',');
+
+    if (v != NULL)
+      *v++ = '\0';
+    if (*options != '\0')
+      files[i] = options;
+    i++;
+    options = v;
+  }
+
+  if ((data->kvmfd = kvm_open(files[0], files[1], files[2], O_RDONLY, progname)) == NULL)
+    return 0;
+
+  if (kvm_nlist(data->kvmfd, kvm_syms) < 0 ||
+      kvm_read(data->kvmfd, (unsigned long) kvm_syms[0].n_value,
+	       &ifnetaddr, sizeof(ifnetaddr)) < 0 ||
+      ifnetaddr == 0)
+    return 0;
+  data->ifnetaddr = ifnetaddr;
+
+  driver->data = (void *) data;
+  return 1;
+}
+
+static int kvm_get_stats(struct ifstat_driver *driver,
+			  struct ifstat_data *list) {
+  struct kvm_driver_data *data = driver->data;
+  unsigned long ifaddr;
+  struct ifnet ifnet;
+  char ifname[16], interface[32];
+  struct ifstat_data *cur;
+  
+  for (ifaddr = data->ifnetaddr; ifaddr != 0;
        ifaddr = (unsigned long) ifnet.if_list.tqe_next) {
-    if (kvm_read(kvmfd, ifaddr, &ifnet, sizeof(ifnet)) < 0)
-      exit(EXIT_FAILURE);
+    if (kvm_read(data->kvmfd, ifaddr, &ifnet, sizeof(ifnet)) < 0)
+      return 0;
 #ifdef HAVE_IFNET_IF_XNAME
     memcpy(interface, ifnet.if_xname, sizeof(interface));
     interface[sizeof(interface) - 1] = '\0';
 #else   
-    if (kvm_read(kvmfd, (unsigned long) ifnet.if_name, &ifname, sizeof(ifname)) < 0)
-      exit(EXIT_FAILURE);
+    if (kvm_read(data->kvmfd, (unsigned long) ifnet.if_name, &ifname, sizeof(ifname)) < 0)
+      return 0;
     ifname[sizeof(ifname) - 1] = '\0';
     sprintf(interface, "%s%d", ifname, ifnet.if_unit);
 #endif    
@@ -165,7 +214,13 @@ void get_stats(struct ifstat_data *list) {
       continue;
     set_interface_stats(cur, ifnet.if_ibytes, ifnet.if_obytes);
   }
+  return 1;
 }
+
+static void kvm_close_driver(struct ifstat_driver *driver) {
+  kvm_close(((struct kvm_driver_data *) driver->data)->kvmfd);
+}
+
 #endif
 
 #ifdef USE_IFMIB
@@ -190,38 +245,44 @@ static int get_ifdata(int index, struct ifmibdata * ifmd) {
   int size = sizeof(*ifmd);
 
   if (sysctl(ifinfo, sizeof(ifinfo) / sizeof(int), ifmd, &size, NULL, 0) < 0)
-    return -1;
+    return 0;
 
-  return 0;
+  return 1;
 }
 
-struct ifstat_data *scan_interfaces() {
+struct ifstat_data *ifmib_scan_interfaces(struct ifstat_driver *driver,
+					  int flags) {
   int count, i;
   struct ifmibdata ifmd;
   struct ifstat_data *list = NULL;
-
+  
   if ((count = get_ifcount()) <= 0)
     return NULL;
 
   for (i = 1; i <= count; i++) {
-    if (get_ifdata(i, &ifmd) < 0)
+    if (!get_ifdata(i, &ifmd))
       continue;
-    if (ifmd.ifmd_flags & IFF_UP)
+    if ((ifmd.ifmd_flags & IFF_LOOPBACK) &&
+	!(flags & IFSTAT_LOOPBACK))
+      continue;
+    if ((ifmd.ifmd_flags & IFF_UP) ||
+	(flags & IFSTAT_DOWN))
       add_interface(&list, ifmd.ifmd_name);
   }
   return list;
 }
 
-void get_stats(struct ifstat_data *list) {
+static int ifmib_get_stats(struct ifstat_driver *driver,
+			   struct ifstat_data *list) {
   int count, i;
   struct ifmibdata ifmd;
   struct ifstat_data *cur;
   
   if ((count = get_ifcount()) <= 0)
-    return;
+    return 0;
 
   for (i = 1; i <= count; i++) {
-    if (get_ifdata(i, &ifmd) < 0)
+    if (!get_ifdata(i, &ifmd))
       continue;
     if ((cur = get_interface(list, ifmd.ifmd_name)) == NULL)
       continue;
@@ -229,12 +290,26 @@ void get_stats(struct ifstat_data *list) {
 			ifmd.ifmd_data.ifi_ibytes,
 			ifmd.ifmd_data.ifi_obytes);
   }
+  return 1;
 }
 #endif
 
 #ifdef USE_IOCTL
+static void ioctl_add_interface(struct ifstat_data **list, int sd,
+				struct ifreq * ifr, int flags) {
+  if (ioctl(sd, SIOCGIFFLAGS, (char *)ifr) != 0)
+    return;
+  if ((ifr->ifr_flags & IFF_LOOPBACK) &&
+      !(flags & IFSTAT_LOOPBACK))
+    return;
+  if ((ifr->ifr_flags & IFF_UP) ||
+      (flags & IFSTAT_DOWN))
+    add_interface(list, ifr->ifr_name);
+}
+
 #ifdef USE_IFNAMEINDEX
-struct ifstat_data *scan_interfaces() {
+static struct ifstat_data *ioctl_scan_interfaces(struct ifstat_driver *driver,
+						 int flags) {
   struct ifreq ifr;
   struct if_nameindex *iflist, *cur;
   struct ifstat_data *list = NULL;
@@ -253,9 +328,7 @@ struct ifstat_data *scan_interfaces() {
   for(cur = iflist; cur->if_index != 0 && cur->if_name != NULL; cur++) {
     memcpy(ifr.ifr_name, cur->if_name, sizeof(ifr.ifr_name));
     ifr.ifr_name[sizeof(ifr.ifr_name) - 1] = '\0';
-    if (ioctl(sd, SIOCGIFFLAGS, (char *)&ifr) == 0 &&
-	ifr.ifr_flags & IFF_UP)
-      add_interface(&list, ifr.ifr_name);
+    ioctl_add_interface(&list, sd, &ifr, flags);
   }
   if_freenameindex(iflist);
 
@@ -265,7 +338,8 @@ struct ifstat_data *scan_interfaces() {
   return list;
 }
 #else
-struct ifstat_data *scan_interfaces() {
+static struct ifstat_data *ioctl_scan_interfaces(struct ifstat_driver *driver,
+						 int flags) {
   struct ifconf ifc;
   struct ifreq *ifr;
   struct ifstat_data *list = NULL;
@@ -308,9 +382,7 @@ struct ifstat_data *scan_interfaces() {
 #else
     n += sizeof(struct ifreq);
 #endif    
-    if (ioctl(sd, SIOCGIFFLAGS, (char *)ifr) == 0 &&
-	ifr->ifr_flags & IFF_UP)
-      add_interface(&list, ifr->ifr_name);
+    ioctl_add_interface(&list, sd, ifr, flags);
   }
 
  endbuf:
@@ -324,31 +396,66 @@ struct ifstat_data *scan_interfaces() {
 #endif
 
 #ifdef USE_PROC
-void get_stats(struct ifstat_data *list) {
+struct proc_driver_data {
+  char *file;
+  int checked;
+};
+
+static int proc_open_driver(struct ifstat_driver *driver,
+			    char *options) {
+  struct proc_driver_data *data;
+
+  if ((data = malloc(sizeof(struct proc_driver_data))) == NULL)
+    return 0;
+
+  data->file = (options != NULL) ? strdup(options) : NULL;
+  data->checked = 0;
+  driver->data = (void *) data;
+
+  return 1;
+}
+
+static void proc_close_driver(struct ifstat_driver *driver) {
+  struct proc_driver_data *data = driver->data;
+
+  if (data->file != NULL)
+    free(data->file);
+  free(data);
+}
+
+static int proc_get_stats(struct ifstat_driver *driver,
+			  struct ifstat_data *list) {
   char buf[1024];
   FILE *f;
   char *iface, *stats;
   unsigned long bytesin, bytesout;
   struct ifstat_data *cur;
-  static int checked;
+  struct proc_driver_data *data = driver->data;
+  char *file;
 
-  if ((f = fopen("/proc/net/dev", "r")) == NULL) {
-    fprintf(stderr, "can't open /proc/net/dev: ");
+  if (data->file != NULL)
+    file = data->file;
+  else
+    file = "/proc/net/dev";
+
+  if ((f = fopen(file, "r")) == NULL) {
+    fprintf(stderr, "%s: can't open %s: ", progname, file);
     perror("fopen");
-    exit(EXIT_FAILURE);
+    return 0;
   }
   
   /* check first lines */
   if (fgets(buf, sizeof(buf), f) == NULL)
     goto badproc;
-  if (!checked && strncmp(buf, "Inter-|", 7))
+  if (!data->checked && strncmp(buf, "Inter-|", 7))
     goto badproc;
   if (fgets(buf, sizeof(buf), f) == NULL)
     goto badproc;
-  if (!checked && strncmp(buf, " face |by", 9))
-    goto badproc;
-  else
-    checked = 1;
+  if (!data->checked) {
+    if (strncmp(buf, " face |by", 9))
+      goto badproc;
+    data->checked = 1;
+  }
 
   while (fgets(buf, sizeof(buf), f) != NULL) {
     if ((stats = strchr(buf, ':')) == NULL)
@@ -366,34 +473,60 @@ void get_stats(struct ifstat_data *list) {
       set_interface_stats(cur, bytesin, bytesout);
   }
   fclose(f);
-  return;
+  return 1;
 
  badproc:
-  fprintf(stderr, "unsupported /proc/net/dev format.\n");
-  exit(EXIT_FAILURE);
+  fclose(f);
+  fprintf(stderr, "%s: %s: unsupported format.\n", progname, file);
+  return 0;
 }
 #endif
 
-#ifdef USE_SNMP
-/* simple local SNMP driver for unsupported OS where we have a snmpd */
+static struct ifstat_driver drivers[] = {
+#ifdef USE_KSTAT  
+  { "kstat", &kstat_open_driver, &ioctl_scan_interfaces, &kstat_get_stats,
+    &kstat_close_driver },
+#endif
+#ifdef USE_IFMIB  
+  { "ifmib", NULL, &ifmib_scan_interfaces, &ifmib_get_stats, NULL },
+#endif
+#ifdef USE_KVM  
+  { "kvm",  &kvm_open_driver, &ioctl_scan_interfaces, &kvm_get_stats,
+    &kvm_close_driver },
+#endif
+#ifdef USE_PROC  
+  { "proc", &proc_open_driver, &ioctl_scan_interfaces, &proc_get_stats,
+    &proc_close_driver },
+#endif
+#ifdef USE_SNMP  
+  { "snmp", &snmp_open_driver, &snmp_scan_interfaces, &snmp_get_stats,
+    &snmp_close_driver },
+#endif  
+  { NULL } };
+  
+int get_driver(char *name, struct ifstat_driver *driver) {
+  int num = 0;
+  
+  if (name != NULL) 
+    for (num = 0; drivers[num].name != NULL; num++)
+      if (!strcasecmp(drivers[num].name, name))
+	break;
 
-static void _checkinit() {
-  static int snmp_initialised = 0;
+  if (drivers[num].name == NULL)
+    return 0;
 
-  if (!snmp_initialised) {
-    snmp_init("localhost");
-    snmp_initialised = 1;
+  memcpy(driver, &(drivers[num]), sizeof(struct ifstat_driver));
+  driver->data = NULL;
+  return 1;
+}
+
+void print_drivers(FILE *dev) {
+  int num;
+
+  for(num = 0; drivers[num].name != NULL; num++) {
+    if (num != 0)
+      fprintf(dev, ", %s", drivers[num].name);
+    else
+      fprintf(dev, "%s", drivers[num].name);
   }
-}    
-
-struct ifstat_data *scan_interfaces() {
-  _checkinit();
-  return snmp_scan_interfaces();
 }
-
-
-void get_stats(struct ifstat_data *ifs) {
-  _checkinit();
-  snmp_get_stats(ifs);
-}
-#endif
