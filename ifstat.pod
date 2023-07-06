@@ -12,7 +12,7 @@ ifstat - Report InterFace STATistics
 
 =head1 SYNOPSIS
 
-B<ifstat> [B<-a>] [B<-l>] [B<-z>] [B<-n>] [B<-v>] [B<-h>] [B<-t>] [B<-i> if0,if1,...] [B<-d> drv[:opt]] [B<-s> [comm@][#]host[/nn]] [B<-T>] [B<-A>] [B<-w>] [B<-W>] [B<-S>] [B<-b>] [B<-q>] [delay[/delay] [count]]
+B<ifstat> [B<-a>] [B<-l>] [B<-z>] [B<-n>] [B<-v>] [B<-h>] [B<-t>] [B<-i> if0,if1,...] [B<-d> drv[:opt]] [B<-s> [comm@][#]host[/nn]] [B<-T>] [B<-A>] [B<-w>] [B<-W>] [B<-S>] [B<-M>] [B<-b>] [B<-q>] [delay[/delay] [count]]
 
 =head1 DESCRIPTION
 
@@ -75,6 +75,10 @@ Wrap lines that are larger than the terminal width (implies -w). Wrapped lines a
 =item B<-S>
 
 Keep stats updated on the same line if possible (no scrolling nor wrapping).
+
+=item B<-M>
+
+Reports bandwidth in Mbytes/sec instead of kbytes/sec.
 
 =item B<-b>
 
@@ -157,4 +161,4 @@ vmstat(1), iostat(1)
 
 =head1 AUTHOR
 
-Gaël Roualland, <gael.roualland@dial.oleane.com>
+GaÃ«l Roualland, <gael.roualland@dial.oleane.com>
