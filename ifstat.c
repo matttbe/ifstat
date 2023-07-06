@@ -170,7 +170,7 @@ static void usage(int result) {
   fprintf(stderr,
 	  "usage: %s [-a] [-l] [-z] [-n] [-v] [-h] [-t] [-i if0,if1,...]\n"
 	  "       [-d drv[:opt]] [-s [comm@][#]host[/nn]] [-T] [-A] [-w]\n"
-	  "       [-W] [-S] [-b] [-q] [delay[/delay] [count]]\n", ifstat_progname);
+	  "       [-W] [-S] [-M] [-b] [-q] [delay[/delay] [count]]\n", ifstat_progname);
   exit(result);
 }
 
@@ -230,6 +230,7 @@ static RETSIGTYPE sigcont(int sig) {
 #define OPT_WRAP      64
 #define OPT_NOTITLE  128
 #define OPT_NOSCROLL 256
+#define OPT_UNITMEGA   512
 
 #define SPACE "  "
 
@@ -279,8 +280,13 @@ static void print_legend(struct ifstat_data *ptr, int options, int line) {
     if (pos > 0)
       fputs(SPACE, stdout);
     len = LEN(options, ptr->namelen);
-    print_center((options & OPT_UNITBITS) ? " Kbps in  Kbps out" :
-		 " KB/s in  KB/s out", WIDTH, len);
+    if (options & OPT_UNITMEGA) {
+      print_center((options & OPT_UNITBITS) ? " Mbps in  Mbps out" :
+      " MB/s in  MB/s out", WIDTH, len);
+    } else {
+      print_center((options & OPT_UNITBITS) ? " Kbps in  Kbps out" :
+      " KB/s in  KB/s out", WIDTH, len);
+    }
     if ((pos = pos_next(pos, len, options)) == 0 && ptr->next != NULL)
       return;
   }
@@ -339,7 +345,7 @@ static void print_stats(struct ifstat_list *ifs,
   
   delay = end->tv_sec - start->tv_sec + ((double) (end->tv_usec - start->tv_usec))
     / (double) 1000000;
-  scale = delay * (options & OPT_UNITBITS ? 128 : 1024);
+  scale = delay * (options & OPT_UNITBITS ? 128 : 1024) * (options & OPT_UNITMEGA ? 1024 : 1);
   
   tkbin = tkbout = 0;
   for (ptr = ifs->first; ptr != NULL; ptr = ptr->next) {
@@ -511,6 +517,9 @@ int main(int argc, char **argv) {
 	break;
       case 'b':
 	options |= OPT_UNITBITS;
+	break;
+      case 'M':
+	options |= OPT_UNITMEGA;
 	break;
       case 'z':
 	options |= OPT_NONULL;
