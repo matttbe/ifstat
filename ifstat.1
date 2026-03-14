@@ -134,7 +134,7 @@
 ifstat \- Report InterFace STATistics
 .SH "SYNOPSIS"
 .IX Header "SYNOPSIS"
-\&\fBifstat\fR [\fB\-a\fR] [\fB\-l\fR] [\fB\-z\fR] [\fB\-n\fR] [\fB\-v\fR] [\fB\-h\fR] [\fB\-t\fR] [\fB\-i\fR if0,if1,...] [\fB\-d\fR drv[:opt]] [\fB\-s\fR [comm@][#]host[/nn]] [\fB\-T\fR] [\fB\-A\fR] [\fB\-w\fR] [\fB\-W\fR] [\fB\-S\fR] [\fB\-b\fR] [\fB\-q\fR] [delay[/delay] [count]]
+\&\fBifstat\fR [\fB\-a\fR] [\fB\-l\fR] [\fB\-z\fR] [\fB\-n\fR] [\fB\-v\fR] [\fB\-h\fR] [\fB\-t\fR] [\fB\-i\fR if0,if1,...] [\fB\-d\fR drv[:opt]] [\fB\-s\fR [comm@][#]host[/nn]] [\fB\-T\fR] [\fB\-A\fR] [\fB\-w\fR] [\fB\-W\fR] [\fB\-S\fR] [\fB\-M\fR] [\fB\-b\fR] [\fB\-q\fR] [delay[/delay] [count]]
 .SH "DESCRIPTION"
 .IX Header "DESCRIPTION"
 Ifstat is a little tool to report interface activity, just like iostat/vmstat do for other system statistics.
@@ -180,6 +180,9 @@ Wrap lines that are larger than the terminal width (implies \-w). Wrapped lines 
 .IP "\fB\-S\fR" 4
 .IX Item "-S"
 Keep stats updated on the same line if possible (no scrolling nor wrapping).
+.IP "\fB\-M\fR" 4
+.IX Item "-M"
+Reports bandwidth in Mbytes/sec instead of kbytes/sec.
 .IP "\fB\-b\fR" 4
 .IX Item "-b"
 Reports bandwidth in kbits/sec instead of kbytes/sec.
