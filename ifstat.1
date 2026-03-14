@@ -167,7 +167,7 @@ Turns off displaying the header periodically.
 Adds a timestamp at the beginning of each line.
 .IP "\fB\-T\fR" 4
 .IX Item "-T"
-Reports total bandwith for all monitored interfaces.
+Reports total bandwidth for all monitored interfaces.
 .IP "\fB\-A\fR" 4
 .IX Item "-A"
 Disables use of interface indexes: by default, when polling mechanism is index based (snmp, ifmib), ifstat remembers indexes of monitored interfaces to poll only them. However, if interfaces indexes change often (new interfaces added, etc), you might loose some stats, hence this flag. Note that if you ask ifstat to monitor a non existent interface, it will poll all interfaces until it finds the requested one (regardless of this flag) so you can poll for an interface that goes up and down.
@@ -182,7 +182,7 @@ Wrap lines that are larger than the terminal width (implies \-w). Wrapped lines 
 Keep stats updated on the same line if possible (no scrolling nor wrapping).
 .IP "\fB\-b\fR" 4
 .IX Item "-b"
-Reports bandwith in kbits/sec instead of kbytes/sec.
+Reports bandwidth in kbits/sec instead of kbytes/sec.
 .IP "\fB\-q\fR" 4
 .IX Item "-q"
 Quiet mode, warnings are not printed.
